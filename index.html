@@ -272,6 +272,22 @@
   }
   .watch-links a:hover{background:var(--royal-dim);}
 
+  /* Login screen */
+  .login-screen{
+    position:fixed; inset:0; background: radial-gradient(1200px 600px at 80% -10%, #131a2c 0%, var(--bg) 55%);
+    display:flex; align-items:center; justify-content:center; z-index:100; padding:20px;
+  }
+  .login-box{
+    background: var(--bg-elev); border:1px solid var(--line); border-radius:14px;
+    width:100%; max-width:380px; padding:32px 28px;
+  }
+  .login-title{
+    font-family:'Rajdhani', sans-serif; font-weight:700; font-size:30px; color:#fff;
+    text-transform:uppercase; margin:0 0 4px; text-align:center;
+  }
+  .login-title span{color: var(--royal-hi);}
+  .login-sub{color:var(--text-muted); font-size:13px; text-align:center; margin:0 0 20px;}
+
   /* Mobile card list */
   .mobile-cards{display:none; flex-direction:column; gap:10px;}
   .mcard{
@@ -300,12 +316,31 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+<div id="loginScreen" class="login-screen">
+  <div class="login-box">
+    <h1 class="login-title">Zocker<span>liste</span></h1>
+    <p class="login-sub">Bitte anmelden</p>
+    <form id="loginForm">
+      <div class="field">
+        <label>E-Mail</label>
+        <input type="email" id="loginEmail" required autocomplete="username">
+      </div>
+      <div class="field">
+        <label>Passwort</label>
+        <input type="password" id="loginPassword" required autocomplete="current-password">
+      </div>
+      <p id="loginError" style="color:var(--red); font-size:13px; min-height:18px;"></p>
+      <button type="submit" class="btn btn-primary" style="width:100%;">Anmelden</button>
+    </form>
+  </div>
+</div>
+
+<div class="wrap" id="mainApp" style="display:none;">
   <header>
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-08-supabase-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-08-auth-v1</p>
     </div>
     <div class="header-actions">
       <button class="add-btn" id="openAdd">+ Spiel hinzufügen</button>
@@ -313,6 +348,7 @@
       <button class="btn btn-ghost" id="exportBtn" type="button">⬇ Export</button>
       <button class="btn btn-ghost" id="importBtn" type="button">⬆ Import</button>
       <input type="file" id="importFile" accept=".json" style="display:none;">
+      <button class="btn btn-ghost" id="logoutBtn" type="button">Abmelden</button>
     </div>
   </header>
 
@@ -562,14 +598,126 @@
 </div>
 
 <script>
-/* ---------- Supabase-backed persistent storage (Marvins eigene Datenbank) ---------- */
+/* ---------- Supabase Auth ---------- */
 const SUPABASE_URL = 'https://igkjbbbmrlsuuelblocg.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_Ez4RLryX13KRMcZzOjTJnQ_Z3IB2xSL';
 
-async function supaGet(key){
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/kv_store?key=eq.${encodeURIComponent(key)}&select=value`, {
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+let accessToken = null;
+let refreshTokenVal = null;
+
+function saveSession(session){
+  accessToken = session.access_token;
+  refreshTokenVal = session.refresh_token;
+  try{
+    localStorage.setItem('zl_session', JSON.stringify({ access_token: accessToken, refresh_token: refreshTokenVal }));
+  }catch(e){ /* localStorage evtl. blockiert - Session bleibt dann nur für diese Sitzung erhalten */ }
+}
+
+function loadSavedSession(){
+  try{
+    const raw = localStorage.getItem('zl_session');
+    if (!raw) return null;
+    return JSON.parse(raw);
+  }catch(e){ return null; }
+}
+
+function clearSession(){
+  accessToken = null;
+  refreshTokenVal = null;
+  try{ localStorage.removeItem('zl_session'); }catch(e){}
+}
+
+async function loginWithPassword(email, password){
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
   });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error_description || data.msg || 'Anmeldung fehlgeschlagen');
+  saveSession(data);
+}
+
+async function refreshSession(){
+  if (!refreshTokenVal) return false;
+  try{
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshTokenVal })
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    saveSession(data);
+    return true;
+  }catch(e){ return false; }
+}
+
+function showLogin(message){
+  document.getElementById('mainApp').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginError').textContent = message || '';
+}
+
+async function showApp(){
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('mainApp').style.display = 'block';
+  await loadGames();
+}
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = 'Anmelden...';
+  try{
+    await loginWithPassword(email, password);
+    await showApp();
+  }catch(err){
+    errEl.textContent = err.message;
+  }
+});
+
+(async function initAuth(){
+  const saved = loadSavedSession();
+  if (saved){
+    accessToken = saved.access_token;
+    refreshTokenVal = saved.refresh_token;
+    const ok = await refreshSession();
+    if (ok){ await showApp(); return; }
+    clearSession();
+  }
+  showLogin();
+})();
+
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  clearSession();
+  showLogin();
+});
+
+/* ---------- Supabase-backed persistent storage (nur für eingeloggte Nutzer) ---------- */
+async function supaRequest(path, options){
+  const doFetch = () => fetch(`${SUPABASE_URL}${path}`, {
+    ...options,
+    headers: { ...options.headers, apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}` }
+  });
+  let res = await doFetch();
+  if (res.status === 401){
+    const refreshed = await refreshSession();
+    if (refreshed){
+      res = await doFetch();
+    } else {
+      clearSession();
+      showLogin('Sitzung abgelaufen - bitte erneut anmelden.');
+      throw new Error('Sitzung abgelaufen');
+    }
+  }
+  return res;
+}
+
+async function supaGet(key){
+  const res = await supaRequest(`/rest/v1/kv_store?key=eq.${encodeURIComponent(key)}&select=value`, { headers: {} });
   if (!res.ok) throw new Error('Supabase GET fehlgeschlagen (HTTP ' + res.status + ')');
   const rows = await res.json();
   if (!rows.length) return null;
@@ -577,12 +725,9 @@ async function supaGet(key){
 }
 
 async function supaSet(key, value){
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/kv_store`, {
+  const res = await supaRequest('/rest/v1/kv_store', {
     method: 'POST',
-    headers: {
-      apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates'
-    },
+    headers: { 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
     body: JSON.stringify([{ key, value }])
   });
   if (!res.ok) throw new Error('Supabase SET fehlgeschlagen (HTTP ' + res.status + ')');
@@ -887,8 +1032,6 @@ document.querySelectorAll('thead th[data-sort]').forEach(th => {
     renderTable();
   });
 });
-
-loadGames();
 
 /* ---------- Progress bar ---------- */
 function renderProgressBar(){
