@@ -340,7 +340,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-08-auth-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-08-igdb-switch-v1</p>
     </div>
     <div class="header-actions">
       <button class="add-btn" id="openAdd">+ Spiel hinzufügen</button>
@@ -421,6 +421,13 @@
       <p id="connTestResult" class="tab-hint"></p>
     </div>
     <div id="rawgBrowser" style="display:none;">
+      <div class="filters" style="margin-bottom:10px;">
+        <label style="font-size:12.5px; color:var(--text-muted); align-self:center;">Datenquelle:</label>
+        <select id="sourceSelect">
+          <option value="rawg">RAWG</option>
+          <option value="igdb">IGDB</option>
+        </select>
+      </div>
       <div class="month-chips" id="rawgMonthChips"></div>
       <div class="filters">
         <input type="text" id="rawgSearchInput" placeholder="Spiel suchen...">
@@ -1092,19 +1099,19 @@ document.getElementById('dbSearchBtn').addEventListener('click', async () => {
   const q = document.getElementById('f_title').value.trim();
   const resultsEl = document.getElementById('dbSearchResults');
   if (!q){ alert('Erst einen Titel eingeben.'); return; }
-  if (!rawgKey){
+  if (dataSource === 'rawg' && !rawgKey){
     try{
       const res = await window.storage.get('rawg_api_key', false);
       rawgKey = res && res.value ? res.value : null;
     }catch(e){ rawgKey = null; }
+    if (!rawgKey){ alert('Kein RAWG-Key hinterlegt. Öffne einmal das Register "Datenbank".'); return; }
   }
-  if (!rawgKey){ alert('Kein RAWG-Key hinterlegt. Öffne einmal das Register "Datenbank".'); return; }
   resultsEl.innerHTML = '<p class="muted" style="font-size:12px;">Suche...</p>';
   try{
-    const res = await fetch(`https://api.rawg.io/api/games?key=${encodeURIComponent(rawgKey)}&search=${encodeURIComponent(q)}&page_size=6`);
+    const res = await fetch(buildSourceUrl('search', { q }));
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    const results = data.results || [];
+    const results = (data.results || []).slice(0, 6);
     if (results.length === 0){
       resultsEl.innerHTML = '<p class="muted" style="font-size:12px;">Keine Treffer.</p>';
       return;
@@ -1264,6 +1271,8 @@ function renderKalender(){
 /* ---------- RAWG database browser ---------- */
 let rawgKey = null;
 const DEFAULT_RAWG_KEY = 'e58aa9b7b165409da17d9ccfae178d9c'; // aus Marvins vorherigem Streamlit-Projekt
+const IGDB_PROXY_URL = 'https://zockerliste-igdb-proxyc.siso-gaming.workers.dev/';
+let dataSource = localStorage.getItem('zl_datasource') || 'rawg';
 
 async function initDatenbankTab(){
   try{
@@ -1282,12 +1291,20 @@ async function initDatenbankTab(){
   if (rawgKey){
     document.getElementById('rawgSetup').style.display = 'none';
     document.getElementById('rawgBrowser').style.display = 'block';
+    document.getElementById('sourceSelect').value = dataSource;
     renderRawgMonthChips();
   } else {
     document.getElementById('rawgSetup').style.display = 'block';
     document.getElementById('rawgBrowser').style.display = 'none';
   }
 }
+
+document.getElementById('sourceSelect').addEventListener('change', (e) => {
+  dataSource = e.target.value;
+  localStorage.setItem('zl_datasource', dataSource);
+  document.querySelectorAll('#rawgMonthChips .month-chip').forEach(c => c.classList.remove('active'));
+  document.getElementById('dbGrid').innerHTML = '';
+});
 
 document.getElementById('saveRawgKey').addEventListener('click', async () => {
   const val = document.getElementById('rawgKeyInput').value.trim();
@@ -1340,9 +1357,26 @@ function renderRawgMonthChips(){
     chip.addEventListener('click', () => {
       document.querySelectorAll('#rawgMonthChips .month-chip').forEach(c => c.classList.remove('active'));
       chip.classList.add('active');
-      fetchRawgByDateRange(chip.dataset.start, chip.dataset.end);
+      fetchByDateRange(chip.dataset.start, chip.dataset.end);
     });
   });
+}
+
+// Baut die Anfrage-URL je nach gewählter Datenquelle (RAWG oder IGDB-Proxy)
+function buildSourceUrl(kind, params){
+  if (dataSource === 'igdb'){
+    if (kind === 'search') return `${IGDB_PROXY_URL}?action=search&q=${encodeURIComponent(params.q)}`;
+    if (kind === 'dates'){
+      const startUnix = Math.floor(new Date(params.start + 'T00:00:00Z').getTime() / 1000);
+      const endUnix = Math.floor(new Date(params.end + 'T23:59:59Z').getTime() / 1000);
+      return `${IGDB_PROXY_URL}?action=dates&start=${startUnix}&end=${endUnix}`;
+    }
+    if (kind === 'genre') return `${IGDB_PROXY_URL}?action=genre&name=${encodeURIComponent(params.genre)}`;
+  }
+  // RAWG (Standard)
+  if (kind === 'search') return `https://api.rawg.io/api/games?key=${encodeURIComponent(rawgKey)}&search=${encodeURIComponent(params.q)}&page_size=24`;
+  if (kind === 'dates') return `https://api.rawg.io/api/games?key=${encodeURIComponent(rawgKey)}&dates=${params.start},${params.end}&ordering=released&page_size=24`;
+  if (kind === 'genre') return `https://api.rawg.io/api/games?key=${encodeURIComponent(rawgKey)}&genres=${encodeURIComponent(params.genre)}&ordering=-rating&page_size=8`;
 }
 
 async function rawgFetch(url){
@@ -1356,19 +1390,19 @@ async function rawgFetch(url){
     renderDbGrid(data.results || []);
   }catch(e){
     document.getElementById('dbGrid').innerHTML = '';
-    errorEl.textContent = 'Zugriff auf die Spieledatenbank hat nicht geklappt (' + e.message + '). Das kann daran liegen, dass externe Netzwerkzugriffe in dieser Umgebung blockiert sind. Sag mir im Chat Bescheid, dann übernehme ich die Recherche stattdessen manuell.';
+    errorEl.textContent = `Zugriff auf ${dataSource === 'igdb' ? 'IGDB' : 'RAWG'} hat nicht geklappt (${e.message}). Probier oben die andere Datenquelle, oder sag mir im Chat Bescheid, dann übernehme ich die Recherche manuell.`;
   }
 }
 
-function fetchRawgByDateRange(start, end){
-  rawgFetch(`https://api.rawg.io/api/games?key=${encodeURIComponent(rawgKey)}&dates=${start},${end}&ordering=released&page_size=24`);
+function fetchByDateRange(start, end){
+  rawgFetch(buildSourceUrl('dates', { start, end }));
 }
 
 document.getElementById('rawgSearchBtn').addEventListener('click', () => {
   const q = document.getElementById('rawgSearchInput').value.trim();
   if (!q) return;
   document.querySelectorAll('#rawgMonthChips .month-chip').forEach(c => c.classList.remove('active'));
-  rawgFetch(`https://api.rawg.io/api/games?key=${encodeURIComponent(rawgKey)}&search=${encodeURIComponent(q)}&page_size=24`);
+  rawgFetch(buildSourceUrl('search', { q }));
 });
 document.getElementById('rawgSearchInput').addEventListener('keydown', (e) => {
   if (e.key === 'Enter'){ e.preventDefault(); document.getElementById('rawgSearchBtn').click(); }
@@ -1528,20 +1562,20 @@ async function renderRecommendations(hof){
     grid.innerHTML = '<p class="muted">Noch keine Genre-Daten vorhanden. Füge Spiele über die Datenbank-Suche hinzu, damit hier Empfehlungen erscheinen.</p>';
     return;
   }
-  if (!rawgKey){
+  if (dataSource === 'rawg' && !rawgKey){
     try{
       const res = await window.storage.get('rawg_api_key', false);
       rawgKey = res && res.value ? res.value : null;
     }catch(e){ rawgKey = null; }
-  }
-  if (!rawgKey){
-    grid.innerHTML = '<p class="muted">Kein RAWG-Key hinterlegt.</p>';
-    return;
+    if (!rawgKey){
+      grid.innerHTML = '<p class="muted">Kein RAWG-Key hinterlegt.</p>';
+      return;
+    }
   }
   const topGenre = withGenre[0].genre.split(',')[0].trim();
   grid.innerHTML = '<p class="muted">Lade Empfehlungen für Genre "' + escapeHtml(topGenre) + '"...</p>';
   try{
-    const res = await fetch(`https://api.rawg.io/api/games?key=${encodeURIComponent(rawgKey)}&genres=${encodeURIComponent(topGenre)}&ordering=-rating&page_size=8`);
+    const res = await fetch(buildSourceUrl('genre', { genre: topGenre }));
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     const owned = new Set(games.map(g => g.title.toLowerCase()));
