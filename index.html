@@ -340,7 +340,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-08-fullmonth-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-08-publisher-v1</p>
     </div>
     <div class="header-actions">
       <button class="add-btn" id="openAdd">+ Spiel hinzufügen</button>
@@ -1408,12 +1408,23 @@ function buildSourceUrl(kind, params){
   if (kind === 'genre') return `https://api.rawg.io/api/games?key=${encodeURIComponent(rawgKey)}&genres=${encodeURIComponent(params.genre)}&ordering=-rating&page_size=8`;
 }
 
+// Bekannte große Publisher/Studios - wer hier drin ist, gilt als AAA, unabhängig von der Hype-Zahl
+const KNOWN_AAA_PUBLISHERS = [
+  'electronic arts', 'ea sports', 'ea games', 'ubisoft', 'activision', 'blizzard',
+  'sony interactive entertainment', 'playstation studios', 'nintendo', 'xbox game studios',
+  'microsoft studios', 'bethesda', 'zenimax', 'rockstar games', 'take-two', '2k games', '2k',
+  'square enix', 'capcom', 'sega', 'bandai namco', 'warner bros', 'wb games', 'cd projekt',
+  'epic games', 'konami', 'thq nordic', 'embracer', 'deep silver', 'netease', 'tencent',
+  'hoyoverse', 'mihoyo', 'riot games', 'valve',
+];
+
 // Grobe Näherung, da Datenbanken keine echte AAA/AA/Indie-Kennzeichnung haben
 function getTier(r){
   if (dataSource === 'igdb'){
+    const companies = (r.companies || []).map(c => c.toLowerCase());
+    if (companies.some(c => KNOWN_AAA_PUBLISHERS.some(pub => c.includes(pub)))) return 'AAA';
     const h = r.hypes || 0;
-    if (h >= 30) return 'AAA';
-    if (h >= 8) return 'AA';
+    if (h >= 15) return 'AA';
     return 'Indie';
   } else {
     const a = r.added || 0;
