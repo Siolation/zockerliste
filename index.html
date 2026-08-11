@@ -340,7 +340,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-08-bigfilter-v2</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-08-tiers-v1</p>
     </div>
     <div class="header-actions">
       <button class="add-btn" id="openAdd">+ Spiel hinzufügen</button>
@@ -433,9 +433,17 @@
           <option value="rawg">RAWG</option>
           <option value="igdb">IGDB</option>
         </select>
-        <label style="font-size:12.5px; color:var(--text-muted); align-self:center; display:flex; align-items:center; gap:6px; margin-left:8px;">
-          <input type="checkbox" id="bigTitlesOnly" style="width:auto;">
-          Nur große Titel (AAA/AA)
+      </div>
+      <div class="filters" style="margin-bottom:10px;">
+        <label style="font-size:12.5px; color:var(--text-muted); align-self:center;">Kategorie:</label>
+        <label style="font-size:12.5px; color:var(--text-muted); align-self:center; display:flex; align-items:center; gap:5px;">
+          <input type="checkbox" id="tierAAA" class="tier-check" checked style="width:auto;"> AAA
+        </label>
+        <label style="font-size:12.5px; color:var(--text-muted); align-self:center; display:flex; align-items:center; gap:5px;">
+          <input type="checkbox" id="tierAA" class="tier-check" checked style="width:auto;"> AA
+        </label>
+        <label style="font-size:12.5px; color:var(--text-muted); align-self:center; display:flex; align-items:center; gap:5px;">
+          <input type="checkbox" id="tierIndie" class="tier-check" checked style="width:auto;"> Nische/Indie
         </label>
       </div>
       <div class="month-chips" id="rawgMonthChips"></div>
@@ -1318,9 +1326,11 @@ document.getElementById('sourceSelect').addEventListener('change', (e) => {
   document.getElementById('dbGrid').innerHTML = '';
 });
 
-document.getElementById('bigTitlesOnly').addEventListener('change', () => {
-  const activeChip = document.querySelector('#rawgMonthChips .month-chip.active');
-  if (activeChip) fetchByDateRange(activeChip.dataset.start, activeChip.dataset.end);
+document.querySelectorAll('.tier-check').forEach(cb => {
+  cb.addEventListener('change', () => {
+    const activeChip = document.querySelector('#rawgMonthChips .month-chip.active');
+    if (activeChip) fetchByDateRange(activeChip.dataset.start, activeChip.dataset.end);
+  });
 });
 
 document.getElementById('saveRawgKey').addEventListener('click', async () => {
@@ -1381,23 +1391,36 @@ function renderRawgMonthChips(){
 
 // Baut die Anfrage-URL je nach gewählter Datenquelle (RAWG oder IGDB-Proxy)
 function buildSourceUrl(kind, params){
-  const bigOnly = document.getElementById('bigTitlesOnly').checked;
   if (dataSource === 'igdb'){
     if (kind === 'search') return `${IGDB_PROXY_URL}?action=search&q=${encodeURIComponent(params.q)}`;
     if (kind === 'dates'){
       const startUnix = Math.floor(new Date(params.start + 'T00:00:00Z').getTime() / 1000);
       const endUnix = Math.floor(new Date(params.end + 'T23:59:59Z').getTime() / 1000);
-      return `${IGDB_PROXY_URL}?action=dates&start=${startUnix}&end=${endUnix}${bigOnly ? '&big=1' : ''}`;
+      return `${IGDB_PROXY_URL}?action=dates&start=${startUnix}&end=${endUnix}`;
     }
     if (kind === 'genre') return `${IGDB_PROXY_URL}?action=genre&name=${encodeURIComponent(params.genre)}`;
   }
   // RAWG (Standard)
   if (kind === 'search') return `https://api.rawg.io/api/games?key=${encodeURIComponent(rawgKey)}&search=${encodeURIComponent(params.q)}&page_size=24`;
   if (kind === 'dates'){
-    const order = bigOnly ? '-added' : 'released';
-    return `https://api.rawg.io/api/games?key=${encodeURIComponent(rawgKey)}&dates=${params.start},${params.end}&ordering=${order}&page_size=40`;
+    return `https://api.rawg.io/api/games?key=${encodeURIComponent(rawgKey)}&dates=${params.start},${params.end}&ordering=released&page_size=60`;
   }
   if (kind === 'genre') return `https://api.rawg.io/api/games?key=${encodeURIComponent(rawgKey)}&genres=${encodeURIComponent(params.genre)}&ordering=-rating&page_size=8`;
+}
+
+// Grobe Näherung, da Datenbanken keine echte AAA/AA/Indie-Kennzeichnung haben
+function getTier(r){
+  if (dataSource === 'igdb'){
+    const h = r.hypes || 0;
+    if (h >= 30) return 'AAA';
+    if (h >= 8) return 'AA';
+    return 'Indie';
+  } else {
+    const a = r.added || 0;
+    if (a >= 500) return 'AAA';
+    if (a >= 100) return 'AA';
+    return 'Indie';
+  }
 }
 
 async function rawgFetch(url){
@@ -1409,11 +1432,15 @@ async function rawgFetch(url){
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     let results = data.results || [];
-    const bigOnly = document.getElementById('bigTitlesOnly').checked;
-    if (bigOnly && dataSource === 'rawg'){
-      // RAWG hat keine echte AAA-Kennung - "added" (wie viele Nutzer das Spiel getrackt haben) als Näherung nutzen
-      results = results.filter(r => (r.added || 0) > 300);
-    }
+    const wantAAA = document.getElementById('tierAAA').checked;
+    const wantAA = document.getElementById('tierAA').checked;
+    const wantIndie = document.getElementById('tierIndie').checked;
+    results = results.filter(r => {
+      const tier = getTier(r);
+      if (tier === 'AAA') return wantAAA;
+      if (tier === 'AA') return wantAA;
+      return wantIndie;
+    });
     renderDbGrid(results);
   }catch(e){
     document.getElementById('dbGrid').innerHTML = '';
