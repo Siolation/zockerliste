@@ -340,7 +340,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-08-igdb-switch-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-08-bigfilter-v2</p>
     </div>
     <div class="header-actions">
       <button class="add-btn" id="openAdd">+ Spiel hinzufügen</button>
@@ -400,8 +400,14 @@
   </div>
 
   <div id="tab-kalender" class="tab-panel" style="display:none;">
-    <p class="tab-hint">Spiele mit bekanntem Releasedatum, chronologisch sortiert. Sag mir im Chat "aktualisiere meinen Releasekalender", damit ich neue Termine recherchiere.</p>
-    <button class="btn btn-ghost" id="icsExportBtn" type="button" style="margin-bottom:14px;">📅 Als Kalenderdatei (.ics) exportieren</button>
+    <p class="tab-hint">Kommende Spiele aus deiner Liste, chronologisch sortiert. Sag mir im Chat "aktualisiere meinen Releasekalender", damit ich neue Termine recherchiere.</p>
+    <div class="filters" style="margin-bottom:14px;">
+      <button class="btn btn-ghost" id="icsExportBtn" type="button">📅 Als Kalenderdatei (.ics) exportieren</button>
+      <label style="font-size:12.5px; color:var(--text-muted); align-self:center; display:flex; align-items:center; gap:6px;">
+        <input type="checkbox" id="showReleasedToo" style="width:auto;">
+        Auch bereits erschienene anzeigen
+      </label>
+    </div>
     <div class="month-chips" id="monthChips"></div>
     <div class="cal-list" id="calList"></div>
   </div>
@@ -427,6 +433,10 @@
           <option value="rawg">RAWG</option>
           <option value="igdb">IGDB</option>
         </select>
+        <label style="font-size:12.5px; color:var(--text-muted); align-self:center; display:flex; align-items:center; gap:6px; margin-left:8px;">
+          <input type="checkbox" id="bigTitlesOnly" style="width:auto;">
+          Nur große Titel (AAA/AA)
+        </label>
       </div>
       <div class="month-chips" id="rawgMonthChips"></div>
       <div class="filters">
@@ -1167,6 +1177,7 @@ function exportIcs(){
 }
 
 document.getElementById('icsExportBtn').addEventListener('click', exportIcs);
+document.getElementById('showReleasedToo').addEventListener('change', () => { calSelectedMonth = 'alle'; renderKalender(); });
 
 document.getElementById('randomPickBtn').addEventListener('click', () => {
   const pool = games.filter(g => g.status === 'Noch zocken');
@@ -1223,14 +1234,15 @@ const MONTH_NAMES_DE = ['Januar','Februar','März','April','Mai','Juni','Juli','
 let calSelectedMonth = 'alle';
 
 function renderKalender(){
-  const withDates = games.filter(g => g.releasedate);
-  withDates.sort((a,b) => a.releasedate.localeCompare(b.releasedate));
   const today = new Date().toISOString().slice(0,10);
+  const showReleased = document.getElementById('showReleasedToo').checked;
+  const withDates = games.filter(g => g.releasedate && (showReleased || g.releasedate > today));
+  withDates.sort((a,b) => a.releasedate.localeCompare(b.releasedate));
   const calList = document.getElementById('calList');
 
   if (withDates.length === 0){
     document.getElementById('monthChips').innerHTML = '';
-    calList.innerHTML = '<div class="empty-state"><h3>Noch keine Termine</h3><p>Sag mir im Chat "aktualisiere meinen Releasekalender", damit ich Releasedaten für deine Wunschliste recherchiere.</p></div>';
+    calList.innerHTML = `<div class="empty-state"><h3>Keine ${showReleased ? '' : 'kommenden '}Termine</h3><p>Sag mir im Chat "aktualisiere meinen Releasekalender", damit ich Releasedaten für deine Wunschliste recherchiere.</p></div>`;
     return;
   }
 
@@ -1306,6 +1318,11 @@ document.getElementById('sourceSelect').addEventListener('change', (e) => {
   document.getElementById('dbGrid').innerHTML = '';
 });
 
+document.getElementById('bigTitlesOnly').addEventListener('change', () => {
+  const activeChip = document.querySelector('#rawgMonthChips .month-chip.active');
+  if (activeChip) fetchByDateRange(activeChip.dataset.start, activeChip.dataset.end);
+});
+
 document.getElementById('saveRawgKey').addEventListener('click', async () => {
   const val = document.getElementById('rawgKeyInput').value.trim();
   if (!val) return;
@@ -1364,18 +1381,22 @@ function renderRawgMonthChips(){
 
 // Baut die Anfrage-URL je nach gewählter Datenquelle (RAWG oder IGDB-Proxy)
 function buildSourceUrl(kind, params){
+  const bigOnly = document.getElementById('bigTitlesOnly').checked;
   if (dataSource === 'igdb'){
     if (kind === 'search') return `${IGDB_PROXY_URL}?action=search&q=${encodeURIComponent(params.q)}`;
     if (kind === 'dates'){
       const startUnix = Math.floor(new Date(params.start + 'T00:00:00Z').getTime() / 1000);
       const endUnix = Math.floor(new Date(params.end + 'T23:59:59Z').getTime() / 1000);
-      return `${IGDB_PROXY_URL}?action=dates&start=${startUnix}&end=${endUnix}`;
+      return `${IGDB_PROXY_URL}?action=dates&start=${startUnix}&end=${endUnix}${bigOnly ? '&big=1' : ''}`;
     }
     if (kind === 'genre') return `${IGDB_PROXY_URL}?action=genre&name=${encodeURIComponent(params.genre)}`;
   }
   // RAWG (Standard)
   if (kind === 'search') return `https://api.rawg.io/api/games?key=${encodeURIComponent(rawgKey)}&search=${encodeURIComponent(params.q)}&page_size=24`;
-  if (kind === 'dates') return `https://api.rawg.io/api/games?key=${encodeURIComponent(rawgKey)}&dates=${params.start},${params.end}&ordering=released&page_size=24`;
+  if (kind === 'dates'){
+    const order = bigOnly ? '-added' : 'released';
+    return `https://api.rawg.io/api/games?key=${encodeURIComponent(rawgKey)}&dates=${params.start},${params.end}&ordering=${order}&page_size=40`;
+  }
   if (kind === 'genre') return `https://api.rawg.io/api/games?key=${encodeURIComponent(rawgKey)}&genres=${encodeURIComponent(params.genre)}&ordering=-rating&page_size=8`;
 }
 
@@ -1387,7 +1408,13 @@ async function rawgFetch(url){
     const res = await fetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    renderDbGrid(data.results || []);
+    let results = data.results || [];
+    const bigOnly = document.getElementById('bigTitlesOnly').checked;
+    if (bigOnly && dataSource === 'rawg'){
+      // RAWG hat keine echte AAA-Kennung - "added" (wie viele Nutzer das Spiel getrackt haben) als Näherung nutzen
+      results = results.filter(r => (r.added || 0) > 300);
+    }
+    renderDbGrid(results);
   }catch(e){
     document.getElementById('dbGrid').innerHTML = '';
     errorEl.textContent = `Zugriff auf ${dataSource === 'igdb' ? 'IGDB' : 'RAWG'} hat nicht geklappt (${e.message}). Probier oben die andere Datenquelle, oder sag mir im Chat Bescheid, dann übernehme ich die Recherche manuell.`;
