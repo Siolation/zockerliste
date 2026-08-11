@@ -340,7 +340,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-08-tiers-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-08-fullmonth-v1</p>
     </div>
     <div class="header-actions">
       <button class="add-btn" id="openAdd">+ Spiel hinzufügen</button>
@@ -1423,6 +1423,19 @@ function getTier(r){
   }
 }
 
+function filterAndRenderResults(results){
+  const wantAAA = document.getElementById('tierAAA').checked;
+  const wantAA = document.getElementById('tierAA').checked;
+  const wantIndie = document.getElementById('tierIndie').checked;
+  const filtered = results.filter(r => {
+    const tier = getTier(r);
+    if (tier === 'AAA') return wantAAA;
+    if (tier === 'AA') return wantAA;
+    return wantIndie;
+  });
+  renderDbGrid(filtered);
+}
+
 async function rawgFetch(url){
   const errorEl = document.getElementById('rawgError');
   errorEl.textContent = '';
@@ -1431,17 +1444,30 @@ async function rawgFetch(url){
     const res = await fetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    let results = data.results || [];
-    const wantAAA = document.getElementById('tierAAA').checked;
-    const wantAA = document.getElementById('tierAA').checked;
-    const wantIndie = document.getElementById('tierIndie').checked;
-    results = results.filter(r => {
-      const tier = getTier(r);
-      if (tier === 'AAA') return wantAAA;
-      if (tier === 'AA') return wantAA;
-      return wantIndie;
-    });
-    renderDbGrid(results);
+    filterAndRenderResults(data.results || []);
+  }catch(e){
+    document.getElementById('dbGrid').innerHTML = '';
+    errorEl.textContent = `Zugriff auf ${dataSource === 'igdb' ? 'IGDB' : 'RAWG'} hat nicht geklappt (${e.message}). Probier oben die andere Datenquelle, oder sag mir im Chat Bescheid, dann übernehme ich die Recherche manuell.`;
+  }
+}
+
+// RAWG begrenzt page_size auf 40 - für einen ganzen Monat holen wir mehrere Seiten, damit nicht nur die ersten Tage erfasst werden
+async function fetchDatesMerged(start, end){
+  const errorEl = document.getElementById('rawgError');
+  errorEl.textContent = '';
+  document.getElementById('dbGrid').innerHTML = '<p class="muted">Lade...</p>';
+  try{
+    if (dataSource === 'igdb'){
+      const res = await fetch(buildSourceUrl('dates', { start, end }));
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      filterAndRenderResults(data.results || []);
+    } else {
+      const baseUrl = `https://api.rawg.io/api/games?key=${encodeURIComponent(rawgKey)}&dates=${start},${end}&ordering=released&page_size=40`;
+      const [p1, p2, p3] = await Promise.all([1,2,3].map(p => fetch(baseUrl + `&page=${p}`).then(r => r.ok ? r.json() : { results: [] })));
+      const merged = [...(p1.results||[]), ...(p2.results||[]), ...(p3.results||[])];
+      filterAndRenderResults(merged);
+    }
   }catch(e){
     document.getElementById('dbGrid').innerHTML = '';
     errorEl.textContent = `Zugriff auf ${dataSource === 'igdb' ? 'IGDB' : 'RAWG'} hat nicht geklappt (${e.message}). Probier oben die andere Datenquelle, oder sag mir im Chat Bescheid, dann übernehme ich die Recherche manuell.`;
@@ -1449,7 +1475,7 @@ async function rawgFetch(url){
 }
 
 function fetchByDateRange(start, end){
-  rawgFetch(buildSourceUrl('dates', { start, end }));
+  fetchDatesMerged(start, end);
 }
 
 document.getElementById('rawgSearchBtn').addEventListener('click', () => {
