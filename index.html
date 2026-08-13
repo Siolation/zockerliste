@@ -401,7 +401,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-13-video-v3</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-13-video-v5</p>
     </div>
     <div class="header-actions">
       <button class="add-btn" id="openAdd">+ Spiel hinzufügen</button>
@@ -2159,7 +2159,7 @@ function drawSummarySlide(ctx, w, h, year, yearGames, hours, spent, topGenre){
 }
 
 // Sanfte Überblendung zwischen zwei Folien (Crossfade), damit Schnitte nicht hart wirken
-async function crossfadeTo(canvas, ctx, prevSnapshot, drawNewFn, steps=9, stepMs=45){
+async function crossfadeTo(canvas, ctx, prevSnapshot, drawNewFn, track, steps=12, stepMs=70){
   const off = document.createElement('canvas');
   off.width = canvas.width; off.height = canvas.height;
   drawNewFn(off.getContext('2d'));
@@ -2170,34 +2170,60 @@ async function crossfadeTo(canvas, ctx, prevSnapshot, drawNewFn, steps=9, stepMs
     ctx.globalAlpha = alpha;
     ctx.drawImage(off, 0, 0);
     ctx.globalAlpha = 1;
+    if (track && track.requestFrame) track.requestFrame();
     await sleep(stepMs);
   }
   return off;
 }
 
+// Hält eine Folie für die angegebene Dauer, mit regelmäßig erzwungenen Aufnahme-Frames
+// (ohne das würde der Browser während ruhiger Phasen unregelmäßig aufnehmen -> ruckelige Wiedergabe)
+async function holdFrame(track, ms, stepMs=200){
+  const steps = Math.max(1, Math.round(ms/stepMs));
+  for (let i=0; i<steps; i++){
+    if (track && track.requestFrame) track.requestFrame();
+    await sleep(stepMs);
+  }
+}
+
 // Ruhige, generierte Ambient-Hintergrundmusik (keine Lizenzprobleme, kein 8-Bit) - läuft über die Gesamtdauer des Videos
 function startBackgroundMusic(audioCtx, dest, durationSec){
-  const chords = [
-    [220.00, 261.63, 329.63],   // Am
-    [174.61, 220.00, 261.63],   // F
-    [130.81, 164.81, 196.00],   // C
-    [196.00, 246.94, 293.66],   // G
-  ];
-  const chordDur = 4;
   const filter = audioCtx.createBiquadFilter();
   filter.type = 'lowpass';
-  filter.frequency.value = 1400;
+  filter.frequency.value = 1300;
   const delay = audioCtx.createDelay();
   delay.delayTime.value = 0.4;
   const feedback = audioCtx.createGain();
-  feedback.gain.value = 0.22;
+  feedback.gain.value = 0.2;
   delay.connect(feedback); feedback.connect(delay);
   filter.connect(dest);
   filter.connect(delay); delay.connect(dest);
 
-  let t = audioCtx.currentTime + 0.05;
-  const totalLoops = Math.ceil(durationSec / (chordDur * chords.length)) + 1;
-  for (let loop = 0; loop < totalLoops; loop++){
+  const now = audioCtx.currentTime + 0.05;
+
+  // Tiefer Bass-Drone, durchgehend mit sanftem Ein-/Ausblenden (Cinematic)
+  const droneOsc = audioCtx.createOscillator();
+  droneOsc.type = 'sine';
+  droneOsc.frequency.value = 65.41; // C2
+  const droneGain = audioCtx.createGain();
+  droneGain.gain.setValueAtTime(0, now);
+  droneGain.gain.linearRampToValueAtTime(0.11, now + 3);
+  droneGain.gain.setValueAtTime(0.11, Math.max(now + 3, now + durationSec - 3));
+  droneGain.gain.linearRampToValueAtTime(0, now + durationSec);
+  droneOsc.connect(droneGain); droneGain.connect(filter);
+  droneOsc.start(now); droneOsc.stop(now + durationSec);
+
+  // Akkord-Flächen mit langsamem Schwellen (Cinematic)
+  const chords = [
+    [130.81, 164.81, 196.00],
+    [146.83, 174.61, 220.00],
+    [164.81, 196.00, 246.94],
+    [130.81, 164.81, 196.00],
+  ];
+  const chordDur = 3.5;
+  let t = now;
+  const chordLoops = Math.ceil(durationSec / (chordDur * chords.length)) + 1;
+  for (let loop = 0; loop < chordLoops; loop++){
     chords.forEach(chord => {
       chord.forEach(freq => {
         const osc = audioCtx.createOscillator();
@@ -2205,15 +2231,30 @@ function startBackgroundMusic(audioCtx, dest, durationSec){
         osc.frequency.value = freq;
         const gain = audioCtx.createGain();
         gain.gain.setValueAtTime(0, t);
-        gain.gain.linearRampToValueAtTime(0.05, t + 0.9);
-        gain.gain.linearRampToValueAtTime(0.0, t + chordDur - 0.4);
-        osc.connect(gain);
-        gain.connect(filter);
-        osc.start(t);
-        osc.stop(t + chordDur);
+        gain.gain.linearRampToValueAtTime(0.055, t + 1.7);
+        gain.gain.linearRampToValueAtTime(0.0, t + chordDur - 0.8);
+        osc.connect(gain); gain.connect(filter);
+        osc.start(t); osc.stop(t + chordDur);
       });
       t += chordDur;
     });
+  }
+
+  // Rhythmischer Puls-Bass (Synthwave)
+  let pt = now;
+  const pulseDur = 0.5;
+  const totalPulses = Math.ceil(durationSec / pulseDur) + 2;
+  for (let i = 0; i < totalPulses; i++){
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = 55;
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0, pt);
+    gain.gain.linearRampToValueAtTime(0.09, pt + 0.01);
+    gain.gain.linearRampToValueAtTime(0, pt + 0.28);
+    osc.connect(gain); gain.connect(filter);
+    osc.start(pt); osc.stop(pt + pulseDur);
+    pt += pulseDur;
   }
 }
 
@@ -2251,34 +2292,42 @@ async function generateYearVideo(){
         monthsData.push({ m, monthGames });
       }
     }
-    const holdIntro = 2.2, holdMonth = 2.6, holdHighlights = 3.0, holdSummary = 3.2, transitionSec = (9*45)/1000;
+    const holdIntro = 2.2, holdMonth = 2.6, holdHighlights = 3.0, holdSummary = 3.2, transitionSec = (12*70)/1000;
     const slideCount = 1 + monthsData.length + 1 + 1; // intro + monate + highlights + summary
     const estDuration = holdIntro + monthsData.length*holdMonth + holdHighlights + holdSummary + slideCount*transitionSec + 1;
 
-    // Audio + Video zu einem Stream kombinieren
-    const canvasStream = canvas.captureStream(10);
+    // Audio + Video zu einem Stream kombinieren - captureStream(0) = manueller Modus, wir steuern jeden Frame selbst
+    // (automatische Aufnahme war unregelmäßig getaktet und verursachte ruckelige Wiedergabe/kaputte Übergänge)
+    const canvasStream = canvas.captureStream(0);
+    let videoTrack = canvasStream.getVideoTracks()[0];
+    if (!videoTrack.requestFrame){
+      // Fallback für Browser ohne manuelle Frame-Steuerung: feste Bildrate statt manueller Aufnahme
+      videoTrack.stop();
+      const fallbackStream = canvas.captureStream(24);
+      videoTrack = fallbackStream.getVideoTracks()[0];
+    }
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const dest = audioCtx.createMediaStreamDestination();
     startBackgroundMusic(audioCtx, dest, estDuration);
-    const combined = new MediaStream([...canvasStream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+    const combined = new MediaStream([videoTrack, ...dest.stream.getAudioTracks()]);
 
     const chunks = [];
     const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus' : 'video/webm';
     const recorder = new MediaRecorder(combined, { mimeType });
     recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
     const stopped = new Promise(resolve => recorder.onstop = resolve);
-    recorder.start();
+    recorder.start(100);
 
     let prevSnapshot = null;
     statusEl.textContent = 'Erstelle Video... Intro';
-    prevSnapshot = await crossfadeTo(canvas, ctx, prevSnapshot, (c) => drawTitleSlide(c, canvas.width, canvas.height, year));
-    await sleep(holdIntro*1000);
+    prevSnapshot = await crossfadeTo(canvas, ctx, prevSnapshot, (c) => drawTitleSlide(c, canvas.width, canvas.height, year), videoTrack);
+    await holdFrame(videoTrack, holdIntro*1000);
 
     for (const { m, monthGames } of monthsData){
       statusEl.textContent = `Erstelle Video... ${MONTH_NAMES_SHORT[m]}`;
       const images = await Promise.all(monthGames.map(g => loadImageSafe(g.cover)));
-      prevSnapshot = await crossfadeTo(canvas, ctx, prevSnapshot, (c) => drawMonthSlide(c, canvas.width, canvas.height, MONTH_NAMES_SHORT[m], monthGames, images, year));
-      await sleep(holdMonth*1000);
+      prevSnapshot = await crossfadeTo(canvas, ctx, prevSnapshot, (c) => drawMonthSlide(c, canvas.width, canvas.height, MONTH_NAMES_SHORT[m], monthGames, images, year), videoTrack);
+      await holdFrame(videoTrack, holdMonth*1000);
     }
 
     // Highlights: bestes Spiel (inkl. Gleichstände) + längstes Spiel
@@ -2293,8 +2342,8 @@ async function generateYearVideo(){
     const bestImages = await Promise.all(bestGames.slice(0,3).map(g => loadImageSafe(g.cover)));
     const longestImg = longestGame ? await loadImageSafe(longestGame.cover) : null;
     if (bestGames.length || longestGame){
-      prevSnapshot = await crossfadeTo(canvas, ctx, prevSnapshot, (c) => drawHighlightsSlide(c, canvas.width, canvas.height, year, bestGames, bestScore, bestImages, longestGame, longestImg));
-      await sleep(holdHighlights*1000);
+      prevSnapshot = await crossfadeTo(canvas, ctx, prevSnapshot, (c) => drawHighlightsSlide(c, canvas.width, canvas.height, year, bestGames, bestScore, bestImages, longestGame, longestImg), videoTrack);
+      await holdFrame(videoTrack, holdHighlights*1000);
     }
 
     const hours = yearGamesAll.reduce((s,g)=>s+(parseFloat(g.duration)||0),0);
@@ -2303,8 +2352,8 @@ async function generateYearVideo(){
     yearGamesAll.forEach(g => { if (g.genre) g.genre.split(',').map(x=>x.trim()).filter(Boolean).forEach(gr => genreCounts[gr]=(genreCounts[gr]||0)+1); });
     const topGenre = Object.entries(genreCounts).sort((a,b)=>b[1]-a[1])[0];
     statusEl.textContent = 'Erstelle Video... Zusammenfassung';
-    prevSnapshot = await crossfadeTo(canvas, ctx, prevSnapshot, (c) => drawSummarySlide(c, canvas.width, canvas.height, year, yearGamesAll, hours, spent, topGenre ? topGenre[0] : null));
-    await sleep(holdSummary*1000);
+    prevSnapshot = await crossfadeTo(canvas, ctx, prevSnapshot, (c) => drawSummarySlide(c, canvas.width, canvas.height, year, yearGamesAll, hours, spent, topGenre ? topGenre[0] : null), videoTrack);
+    await holdFrame(videoTrack, holdSummary*1000);
 
     recorder.stop();
     await stopped;
