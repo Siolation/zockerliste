@@ -6,7 +6,6 @@
 <title>Zockerliste</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
   :root{
     --bg: #0d1017;
@@ -368,6 +367,13 @@
     font-family:'Rajdhani',sans-serif;
   }
   .copy-title-btn:hover{background:var(--royal-dim);}
+
+  /* Native CSS bar chart (Chart.js-Ersatz) */
+  .css-bar-chart{display:flex; align-items:flex-end; gap:10px; height:160px; padding-top:10px;}
+  .cbar-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:6px;}
+  .cbar{width:100%; max-width:44px; border-radius:5px 5px 0 0; background:var(--royal); min-height:2px; transition:height .3s ease;}
+  .cbar-val{font-size:10.5px; color:var(--text-muted); font-family:'JetBrains Mono',monospace;}
+  .cbar-label{font-size:11px; color:var(--text-muted); font-family:'Rajdhani',sans-serif; font-weight:600;}
 </style>
 </head>
 <body>
@@ -395,7 +401,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-13-sync-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-13-video-v1</p>
     </div>
     <div class="header-actions">
       <button class="add-btn" id="openAdd">+ Spiel hinzufügen</button>
@@ -536,11 +542,11 @@
     <div class="chart-card" id="backlogProjectionCard"></div>
     <div class="chart-card">
       <h3>Spielstunden pro Jahr</h3>
-      <canvas id="chartHours" height="90"></canvas>
+      <div id="chartHours" class="css-bar-chart"></div>
     </div>
     <div class="chart-card">
       <h3>Ausgaben pro Jahr (€)</h3>
-      <canvas id="chartSpend" height="90"></canvas>
+      <div id="chartSpend" class="css-bar-chart"></div>
     </div>
     <div class="two-col">
       <div class="chart-card">
@@ -561,8 +567,11 @@
       <div class="filters" style="margin-bottom:10px;">
         <h3 style="margin:0; align-self:center;">📅 Jahresrückblick</h3>
         <select id="wrapYearSelect" style="margin-left:auto;"></select>
+        <button class="btn btn-ghost" id="genVideoBtn" type="button">🎬 Als Video generieren</button>
       </div>
       <div id="yearWrapContent"></div>
+      <div id="videoGenStatus" class="tab-hint" style="display:none;"></div>
+      <video id="wrapVideoPreview" controls style="display:none; width:100%; border-radius:10px; margin-top:12px;"></video>
     </div>
     <div class="chart-card">
       <h3>🏆 Hall of Fame</h3>
@@ -1384,7 +1393,6 @@ function renderSales(){
 }
 
 /* ---------- Tabs ---------- */
-let chartHoursInstance = null, chartSpendInstance = null;
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -1789,6 +1797,24 @@ function parseVerdict(v){
   return num;
 }
 
+function renderCssBarChart(containerId, labels, values, formatFn){
+  const el = document.getElementById(containerId);
+  if (!labels.length){
+    el.innerHTML = '<span class="muted">Keine Daten</span>';
+    return;
+  }
+  const max = Math.max(...values, 1);
+  el.innerHTML = labels.map((label, i) => {
+    const v = values[i] || 0;
+    const heightPct = Math.max((v / max) * 100, v > 0 ? 3 : 0);
+    return `<div class="cbar-col">
+      <span class="cbar-val">${formatFn(v)}</span>
+      <div class="cbar" style="height:${heightPct}%;"></div>
+      <span class="cbar-label">${escapeHtml(label)}</span>
+    </div>`;
+  }).join('');
+}
+
 function renderStats(){
   renderProgressBar();
   const finished = games.filter(g => g.status === 'Durchgezockt');
@@ -1836,39 +1862,9 @@ function renderStats(){
     backlogCard.innerHTML = '';
   }
 
-  // Charts - robust gegen Chart.js-Ladefehler, damit der Rest der Seite trotzdem funktioniert
-  try{
-    if (typeof Chart === 'undefined') throw new Error('Chart.js nicht geladen');
-    if (chartHoursInstance) chartHoursInstance.destroy();
-    if (chartSpendInstance) chartSpendInstance.destroy();
-
-    const chartOpts = {
-      plugins:{legend:{display:false}},
-      scales:{
-        x:{ticks:{color:'#8a92ab'}, grid:{color:'#262e42'}},
-        y:{ticks:{color:'#8a92ab'}, grid:{color:'#262e42'}, beginAtZero:true}
-      }
-    };
-
-    chartHoursInstance = new Chart(document.getElementById('chartHours'), {
-      type:'bar',
-      data:{labels:years, datasets:[{data:years.map(y=>byYearHours[y]), backgroundColor:'#3355ee'}]},
-      options:chartOpts
-    });
-    chartSpendInstance = new Chart(document.getElementById('chartSpend'), {
-      type:'bar',
-      data:{labels:years, datasets:[{data:years.map(y=>byYearSpend[y].toFixed(2)), backgroundColor:'#e8a33d'}]},
-      options:chartOpts
-    });
-  }catch(err){
-    console.error('Chart-Rendering fehlgeschlagen', err);
-    ['chartHours','chartSpend'].forEach(id => {
-      const canvas = document.getElementById(id);
-      if (canvas && canvas.parentElement){
-        canvas.parentElement.insertAdjacentHTML('beforeend', '<p class="tab-hint" style="color:var(--red);">Diagramm konnte nicht geladen werden (Chart.js nicht erreichbar).</p>');
-      }
-    });
-  }
+  // Charts - eigene CSS-Balken statt externer Bibliothek, damit keine CDN-Abhängigkeit mehr besteht
+  renderCssBarChart('chartHours', years, years.map(y => byYearHours[y]), v => v.toFixed(0));
+  renderCssBarChart('chartSpend', years, years.map(y => byYearSpend[y]), v => v.toFixed(0) + '€');
 
   // Top expensive / longest
   const topExpensive = [...games].filter(g=>parseFloat(g.price)>0).sort((a,b)=>(parseFloat(b.price)||0)-(parseFloat(a.price)||0)).slice(0,8);
@@ -1935,6 +1931,210 @@ function renderYearWrap(){
   renderForYear(curVal);
   sel.onchange = () => renderForYear(sel.value);
 }
+
+/* ---------- Jahresrückblick-Video (Canvas-Aufnahme, komplett im Browser) ---------- */
+const MONTH_NAMES_SHORT = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+
+function loadImageSafe(src){
+  return new Promise(resolve => {
+    if (!src){ resolve(null); return; }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+function wrapText(ctx, text, x, y, maxWidth, lineHeight){
+  const words = text.split(' ');
+  let line = '';
+  const lines = [];
+  words.forEach(word => {
+    const test = line ? line + ' ' + word : word;
+    if (ctx.measureText(test).width > maxWidth && line){
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  });
+  if (line) lines.push(line);
+  lines.slice(0,2).forEach((l,i) => ctx.fillText(l, x, y + i*lineHeight));
+}
+
+function drawBackground(ctx, w, h){
+  const grad = ctx.createLinearGradient(0,0,w,h);
+  grad.addColorStop(0, '#131a2c');
+  grad.addColorStop(1, '#0d1017');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,w,h);
+}
+
+function drawTitleSlide(ctx, w, h, year){
+  drawBackground(ctx, w, h);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#6b85ff';
+  ctx.font = '700 34px sans-serif';
+  ctx.fillText('DEIN GAMING', w/2, h/2 - 60);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 90px sans-serif';
+  ctx.fillText(year, w/2, h/2 + 40);
+  ctx.fillStyle = '#8a92ab';
+  ctx.font = '400 22px sans-serif';
+  ctx.fillText('Jahresrückblick', w/2, h/2 + 90);
+}
+
+function drawMonthSlide(ctx, w, h, monthName, monthGames, images){
+  drawBackground(ctx, w, h);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#6b85ff';
+  ctx.font = '700 46px sans-serif';
+  ctx.fillText(monthName, 60, 90);
+
+  const hours = monthGames.reduce((s,g)=>s+(parseFloat(g.duration)||0),0);
+  ctx.fillStyle = '#8a92ab';
+  ctx.font = '400 20px sans-serif';
+  ctx.fillText(`${monthGames.length} Spiel${monthGames.length===1?'':'e'} durchgezockt${hours>0?' · '+hours.toFixed(0)+' Std.':''}`, 60, 130);
+
+  const coverW = 220, coverH = 220, gap = 30, startX = 60, startY = 180;
+  monthGames.slice(0,4).forEach((g, i) => {
+    const x = startX + i * (coverW + gap);
+    const img = images[i];
+    if (img){
+      ctx.drawImage(img, x, startY, coverW, coverH);
+    } else {
+      ctx.fillStyle = '#1b2233';
+      ctx.fillRect(x, startY, coverW, coverH);
+      ctx.fillStyle = '#8a92ab';
+      ctx.font = '600 16px sans-serif';
+      ctx.textAlign = 'center';
+      wrapText(ctx, g.title, x + coverW/2, startY + coverH/2, coverW - 20, 20);
+      ctx.textAlign = 'left';
+    }
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '600 15px sans-serif';
+    ctx.textAlign = 'center';
+    wrapText(ctx, g.title, x + coverW/2, startY + coverH + 25, coverW, 18);
+    ctx.textAlign = 'left';
+  });
+}
+
+function drawSummarySlide(ctx, w, h, year, yearGames, hours, spent, topGenre){
+  drawBackground(ctx, w, h);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 40px sans-serif';
+  ctx.fillText(`${year} im Überblick`, w/2, 110);
+
+  const stats = [
+    [String(yearGames.length), 'Spiele durchgezockt'],
+    [hours.toFixed(0) + ' Std.', 'Gesamtspielzeit'],
+    [spent.toFixed(0) + ' €', 'Ausgegeben'],
+    [topGenre || '–', 'Lieblingsgenre'],
+  ];
+  const colW = w / stats.length;
+  stats.forEach(([val,label], i) => {
+    const x = colW * i + colW/2;
+    ctx.fillStyle = '#6b85ff';
+    ctx.font = '700 42px sans-serif';
+    ctx.fillText(val, x, h/2);
+    ctx.fillStyle = '#8a92ab';
+    ctx.font = '400 16px sans-serif';
+    ctx.fillText(label, x, h/2 + 34);
+  });
+
+  ctx.fillStyle = '#565f78';
+  ctx.font = '400 14px sans-serif';
+  ctx.fillText('Erstellt mit deiner Zockerliste', w/2, h - 40);
+}
+
+async function generateYearVideo(){
+  const year = document.getElementById('wrapYearSelect').value;
+  if (!year){ alert('Kein Jahr mit Daten vorhanden.'); return; }
+  const statusEl = document.getElementById('videoGenStatus');
+  const videoEl = document.getElementById('wrapVideoPreview');
+  const btn = document.getElementById('genVideoBtn');
+
+  if (typeof MediaRecorder === 'undefined' || !HTMLCanvasElement.prototype.captureStream){
+    statusEl.style.display = 'block';
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = 'Dein Browser unterstützt leider keine Video-Aufnahme im Browser (MediaRecorder/captureStream fehlt). Probier es z.B. mit Chrome oder Firefox.';
+    return;
+  }
+
+  btn.disabled = true;
+  statusEl.style.display = 'block';
+  statusEl.style.color = 'var(--text-muted)';
+  videoEl.style.display = 'none';
+
+  try{
+    const canvas = document.createElement('canvas');
+    canvas.width = 1280; canvas.height = 720;
+    const ctx = canvas.getContext('2d');
+
+    const stream = canvas.captureStream(10);
+    const chunks = [];
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
+    const recorder = new MediaRecorder(stream, { mimeType });
+    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    const stopped = new Promise(resolve => recorder.onstop = resolve);
+    recorder.start();
+
+    drawTitleSlide(ctx, canvas.width, canvas.height, year);
+    statusEl.textContent = 'Erstelle Video... Intro';
+    await sleep(2200);
+
+    const yearGamesAll = games.filter(g => g.finished && g.finished.slice(0,4) === year);
+    let monthsWithData = 0;
+    for (let m = 0; m < 12; m++){
+      const monthGames = yearGamesAll.filter(g => parseInt(g.finished.slice(5,7),10)-1 === m);
+      if (monthGames.length === 0) continue;
+      monthsWithData++;
+      statusEl.textContent = `Erstelle Video... ${MONTH_NAMES_SHORT[m]}`;
+      const images = await Promise.all(monthGames.slice(0,4).map(g => loadImageSafe(g.cover)));
+      drawMonthSlide(ctx, canvas.width, canvas.height, MONTH_NAMES_SHORT[m], monthGames, images);
+      await sleep(2600);
+    }
+
+    const hours = yearGamesAll.reduce((s,g)=>s+(parseFloat(g.duration)||0),0);
+    const spent = yearGamesAll.reduce((s,g)=>s+(parseFloat(g.price)||0),0);
+    const genreCounts = {};
+    yearGamesAll.forEach(g => { if (g.genre) g.genre.split(',').map(x=>x.trim()).filter(Boolean).forEach(gr => genreCounts[gr]=(genreCounts[gr]||0)+1); });
+    const topGenre = Object.entries(genreCounts).sort((a,b)=>b[1]-a[1])[0];
+    statusEl.textContent = 'Erstelle Video... Zusammenfassung';
+    drawSummarySlide(ctx, canvas.width, canvas.height, year, yearGamesAll, hours, spent, topGenre ? topGenre[0] : null);
+    await sleep(3200);
+
+    recorder.stop();
+    await stopped;
+
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    videoEl.src = url;
+    videoEl.style.display = 'block';
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `zockerliste-jahresrueckblick-${year}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    statusEl.style.color = 'var(--green)';
+    statusEl.textContent = monthsWithData > 0
+      ? `✅ Fertig! Video mit ${monthsWithData} Monaten wurde heruntergeladen (.webm) und wird unten auch direkt abgespielt.`
+      : '⚠️ Keine Monate mit durchgezockten Spielen in diesem Jahr gefunden - nur Intro/Zusammenfassung im Video.';
+  }catch(err){
+    console.error('Video-Erstellung fehlgeschlagen', err);
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = 'Video-Erstellung fehlgeschlagen: ' + err.message;
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('genVideoBtn').addEventListener('click', generateYearVideo);
 
 function renderHallOfFameAndRecommendations(finished){
   // Hall of Fame: best-rated finished games (lower parsed verdict = better)
