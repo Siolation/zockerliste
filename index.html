@@ -401,7 +401,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-13-video-v5</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-13-video-v6</p>
     </div>
     <div class="header-actions">
       <button class="add-btn" id="openAdd">+ Spiel hinzufügen</button>
@@ -567,7 +567,12 @@
       <div class="filters" style="margin-bottom:10px;">
         <h3 style="margin:0; align-self:center;">📅 Jahresrückblick</h3>
         <select id="wrapYearSelect" style="margin-left:auto;"></select>
-        <button class="btn btn-ghost" id="genVideoBtn" type="button">🎬 Als Video generieren</button>
+      </div>
+      <div class="filters" style="margin-bottom:10px;">
+        <label class="btn btn-ghost" for="customMusicInput" style="cursor:pointer;">🎵 Eigene Musik wählen</label>
+        <input type="file" id="customMusicInput" accept="audio/*" style="display:none;">
+        <span id="customMusicName" class="tab-hint" style="margin:0;">Keine Datei gewählt - generierte Musik wird verwendet</span>
+        <button class="btn btn-ghost" id="genVideoBtn" type="button" style="margin-left:auto;">🎬 Als Video generieren</button>
       </div>
       <div id="yearWrapContent"></div>
       <div id="videoGenStatus" class="tab-hint" style="display:none;"></div>
@@ -2308,11 +2313,34 @@ async function generateYearVideo(){
     }
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const dest = audioCtx.createMediaStreamDestination();
-    startBackgroundMusic(audioCtx, dest, estDuration);
+    const customFile = document.getElementById('customMusicInput').files[0];
+    if (customFile){
+      statusEl.textContent = 'Lade eigene Musik...';
+      const arrayBuf = await customFile.arrayBuffer();
+      const audioBuf = await audioCtx.decodeAudioData(arrayBuf);
+      const source = audioCtx.createBufferSource();
+      source.buffer = audioBuf;
+      source.loop = true;
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0.7;
+      source.connect(gain);
+      gain.connect(dest);
+      source.start(audioCtx.currentTime + 0.05);
+      // stoppt automatisch mit audioCtx.close() am Ende, kein manuelles Timeout nötig
+    } else {
+      startBackgroundMusic(audioCtx, dest, estDuration);
+    }
     const combined = new MediaStream([videoTrack, ...dest.stream.getAudioTracks()]);
 
     const chunks = [];
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus' : 'video/webm';
+    // MP4 bevorzugen, falls der Browser das kann - sonst WebM als Rückfall
+    const mp4Codecs = ['video/mp4;codecs=avc1,mp4a', 'video/mp4;codecs=h264,aac', 'video/mp4'];
+    let mimeType = mp4Codecs.find(t => MediaRecorder.isTypeSupported(t));
+    let fileExt = 'mp4';
+    if (!mimeType){
+      mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus' : 'video/webm';
+      fileExt = 'webm';
+    }
     const recorder = new MediaRecorder(combined, { mimeType });
     recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
     const stopped = new Promise(resolve => recorder.onstop = resolve);
@@ -2359,21 +2387,21 @@ async function generateYearVideo(){
     await stopped;
     audioCtx.close();
 
-    const blob = new Blob(chunks, { type: 'video/webm' });
+    const blob = new Blob(chunks, { type: fileExt === 'mp4' ? 'video/mp4' : 'video/webm' });
     const url = URL.createObjectURL(blob);
     videoEl.src = url;
     videoEl.style.display = 'block';
 
     const a = document.createElement('a');
     a.href = url;
-    a.download = `zockerliste-jahresrueckblick-${year}.webm`;
+    a.download = `zockerliste-jahresrueckblick-${year}.${fileExt}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
 
     statusEl.style.color = 'var(--green)';
     statusEl.textContent = monthsData.length > 0
-      ? `✅ Fertig! Video mit ${monthsData.length} Monaten, Highlights und Musik wurde heruntergeladen (.webm).`
+      ? `✅ Fertig! Video mit ${monthsData.length} Monaten, Highlights und Musik wurde als .${fileExt.toUpperCase()} heruntergeladen.${fileExt === 'webm' ? ' (Dein Browser unterstützt kein direktes MP4 - WebM als Rückfall verwendet.)' : ''}`
       : '⚠️ Keine Monate mit durchgezockten Spielen in diesem Jahr gefunden - nur Intro/Zusammenfassung im Video.';
   }catch(err){
     console.error('Video-Erstellung fehlgeschlagen', err);
@@ -2386,6 +2414,10 @@ async function generateYearVideo(){
 }
 
 document.getElementById('genVideoBtn').addEventListener('click', generateYearVideo);
+document.getElementById('customMusicInput').addEventListener('change', (e) => {
+  const f = e.target.files[0];
+  document.getElementById('customMusicName').textContent = f ? `🎵 ${f.name}` : 'Keine Datei gewählt - generierte Musik wird verwendet';
+});
 
 function renderHallOfFameAndRecommendations(finished){
   // Hall of Fame: best-rated finished games (lower parsed verdict = better)
