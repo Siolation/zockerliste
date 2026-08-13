@@ -23,6 +23,10 @@
     --green: #3ecf8e;
     --red: #e8556b;
   }
+  body[data-theme="purple"]{ --royal:#7c3aed; --royal-hi:#a78bfa; --royal-dim:#2e1c66; }
+  body[data-theme="green"]{ --royal:#12b886; --royal-hi:#4ade9a; --royal-dim:#0d3d30; }
+  body[data-theme="red"]{ --royal:#dc3558; --royal-hi:#f26a89; --royal-dim:#4a1522; }
+  body[data-theme="gold"]{ --royal:#c8922a; --royal-hi:#f0b94d; --royal-dim:#4a3512; }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
   body{
@@ -313,6 +317,57 @@
   @media (min-width: 721px){
     .mobile-cards{display:none;}
   }
+
+  /* View switcher */
+  .view-switch{display:flex; gap:4px; margin-left:auto; align-self:center;}
+  .view-btn{
+    background:var(--bg-elev); border:1px solid var(--line); color:var(--text-muted);
+    padding:8px 12px; border-radius:7px; cursor:pointer; font-size:15px;
+  }
+  .view-btn.active{background:var(--royal-dim); color:var(--royal-hi); border-color:var(--royal);}
+
+  /* Cover / title thumbnail in table & mobile cards */
+  .row-cover{width:36px; height:36px; border-radius:5px; object-fit:cover; display:block;}
+  .row-cover-cell{width:44px;}
+  .mcard-cover{width:52px; height:52px; border-radius:7px; object-fit:cover; flex-shrink:0;}
+  .mcard-top{display:flex; align-items:flex-start; gap:10px;}
+
+  /* Cover grid (GOG-style) */
+  .cover-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(160px,1fr)); gap:14px;}
+  .ctile{
+    position:relative; border-radius:10px; overflow:hidden; aspect-ratio:3/4; cursor:pointer;
+    background:var(--bg-elev); border:1px solid var(--line);
+  }
+  .ctile img{width:100%; height:100%; object-fit:cover; display:block;}
+  .ctile-noimg{
+    width:100%; height:100%; display:flex; align-items:center; justify-content:center;
+    color:var(--text-faint); font-family:'Rajdhani',sans-serif; font-weight:600; font-size:13px;
+    text-align:center; padding:10px;
+  }
+  .ctile-title{
+    position:absolute; left:0; right:0; bottom:0; padding:20px 10px 8px;
+    background:linear-gradient(0deg, rgba(0,0,0,0.85), rgba(0,0,0,0));
+    color:#fff; font-weight:700; font-size:13px; line-height:1.25;
+  }
+  .ctile-status{
+    position:absolute; top:6px; right:6px; font-size:9.5px; padding:2px 7px; border-radius:999px;
+    font-family:'Rajdhani',sans-serif; font-weight:600;
+  }
+  .ctile-overlay{
+    position:absolute; inset:0; background:rgba(10,12,20,0.94); opacity:0; transition:opacity .15s ease;
+    display:flex; flex-direction:column; justify-content:center; gap:5px; padding:12px;
+    font-size:11px; color:var(--text-muted); pointer-events:none;
+  }
+  .ctile:hover .ctile-overlay{opacity:1;}
+  .ctile-overlay b{color:#fff;}
+
+  /* Sales tracker copy button */
+  .copy-title-btn{
+    background:transparent; border:1px solid var(--royal-dim); color:var(--royal-hi);
+    padding:5px 10px; border-radius:6px; font-size:11.5px; font-weight:600; cursor:pointer;
+    font-family:'Rajdhani',sans-serif;
+  }
+  .copy-title-btn:hover{background:var(--royal-dim);}
 </style>
 </head>
 <body>
@@ -340,14 +395,22 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-08-publisher-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-13-sync-v1</p>
     </div>
     <div class="header-actions">
       <button class="add-btn" id="openAdd">+ Spiel hinzufügen</button>
       <button class="btn btn-ghost" id="randomPickBtn" type="button">🎲 Was soll ich zocken?</button>
-      <button class="btn btn-ghost" id="exportBtn" type="button">⬇ Export</button>
+      <button class="btn btn-ghost" id="exportBtn" type="button">⬇ JSON</button>
+      <button class="btn btn-ghost" id="csvExportBtn" type="button">⬇ CSV</button>
       <button class="btn btn-ghost" id="importBtn" type="button">⬆ Import</button>
       <input type="file" id="importFile" accept=".json" style="display:none;">
+      <select id="themeSelect" title="Akzentfarbe">
+        <option value="blue">🔵 Königsblau</option>
+        <option value="purple">🟣 Violett</option>
+        <option value="green">🟢 Smaragd</option>
+        <option value="red">🔴 Rubin</option>
+        <option value="gold">🟡 Gold</option>
+      </select>
       <button class="btn btn-ghost" id="logoutBtn" type="button">Abmelden</button>
     </div>
   </header>
@@ -361,20 +424,23 @@
   </nav>
 
   <div id="tab-liste" class="tab-panel">
-    <div class="pipeline" id="pipeline"></div>
-    <div class="progress-wrap" id="progressWrap"></div>
-    <div class="summary-row" id="summaryRow"></div>
-
     <div class="filters">
-      <input type="text" id="searchInput" placeholder="Titel suchen...">
+      <input type="text" id="searchInput" placeholder="Titel oder Bemerkung suchen...">
       <select id="statusFilter"><option value="">Alle Status</option></select>
       <select id="prioFilter"><option value="">Alle Prioritäten</option></select>
+      <button class="btn btn-ghost" id="syncDbBtn" type="button" title="Cover, Releasedatum und Sprache aus der Datenbank nachziehen">🔄 Mit Datenbank abgleichen</button>
+      <div class="view-switch">
+        <button class="view-btn active" id="viewListBtn" type="button" title="Listenansicht">☰</button>
+        <button class="view-btn" id="viewGridBtn" type="button" title="Cover-Ansicht">▦</button>
+      </div>
     </div>
+    <div id="syncProgress" class="tab-hint" style="display:none;"></div>
 
-    <div class="table-card table-desktop">
+    <div class="table-card table-desktop" id="listViewDesktop">
       <table>
         <thead>
           <tr>
+            <th></th>
             <th data-sort="title">Titel <span class="sort-arrow" data-col="title"></span></th>
             <th data-sort="status">Status <span class="sort-arrow" data-col="status"></span></th>
             <th data-sort="priority">Priorität <span class="sort-arrow" data-col="priority"></span></th>
@@ -391,6 +457,8 @@
         <p>Füg dein erstes Spiel hinzu, oder wir importieren als nächstes deine komplette Liste.</p>
       </div>
     </div>
+
+    <div class="cover-grid" id="coverGrid" style="display:none;"></div>
 
     <div class="mobile-cards" id="mobileCards"></div>
     <div class="empty-state" id="emptyStateMobile" style="display:none;">
@@ -465,6 +533,7 @@
   <div id="tab-statistik" class="tab-panel" style="display:none;">
     <div class="stat-grid" id="statGrid"></div>
     <div class="progress-wrap" id="statProgressWrap"></div>
+    <div class="chart-card" id="backlogProjectionCard"></div>
     <div class="chart-card">
       <h3>Spielstunden pro Jahr</h3>
       <canvas id="chartHours" height="90"></canvas>
@@ -482,6 +551,18 @@
         <h3>Längste Spiele</h3>
         <div id="topLongest" class="rank-list"></div>
       </div>
+    </div>
+    <div class="chart-card">
+      <h3>🎮 Genres</h3>
+      <p class="tab-hint" style="margin-top:-6px;">Welche Genres du am häufigsten durchgezockt hast (nur Spiele mit Genre-Info aus der Datenbank).</p>
+      <div id="genreBars" class="rank-list"></div>
+    </div>
+    <div class="chart-card">
+      <div class="filters" style="margin-bottom:10px;">
+        <h3 style="margin:0; align-self:center;">📅 Jahresrückblick</h3>
+        <select id="wrapYearSelect" style="margin-left:auto;"></select>
+      </div>
+      <div id="yearWrapContent"></div>
     </div>
     <div class="chart-card">
       <h3>🏆 Hall of Fame</h3>
@@ -816,28 +897,6 @@ function uid(){ return 'g_' + Date.now() + '_' + Math.random().toString(36).slic
 function render(){
   document.getElementById('subtitle').textContent = games.length + ' Spiele in der Sammlung';
 
-  // Pipeline stats
-  const pipeline = document.getElementById('pipeline');
-  pipeline.innerHTML = PIPELINE_STAGES.map(stage => {
-    const count = games.filter(g => g.status === stage).length;
-    return `<div class="stage" style="--stage-color:${STATUS_COLORS[stage]}">
-      <div class="num">${count}</div>
-      <div class="lbl">${stage}</div>
-    </div>`;
-  }).join('');
-
-  renderProgressBar();
-
-  // Summary chips
-  const totalSpent = games.reduce((s,g)=> s + (parseFloat(g.price)||0), 0);
-  const totalHours = games.reduce((s,g)=> s + (parseFloat(g.duration)||0), 0);
-  const finishedCount = games.filter(g=>g.status==='Durchgezockt').length;
-  document.getElementById('summaryRow').innerHTML = `
-    <div class="chip">Ausgegeben: <b>${totalSpent.toFixed(2)} €</b></div>
-    <div class="chip">Gespielt: <b>${totalHours.toFixed(0)} Std.</b></div>
-    <div class="chip">Durchgezockt: <b>${finishedCount}</b></div>
-  `;
-
   // Filter dropdowns (populate once with current values preserved)
   const statusFilter = document.getElementById('statusFilter');
   const prioFilter = document.getElementById('prioFilter');
@@ -858,7 +917,11 @@ function renderTable(){
   const prioVal = document.getElementById('prioFilter').value;
 
   let list = games.filter(g => {
-    if (search && !g.title.toLowerCase().includes(search)) return false;
+    if (search){
+      const inTitle = g.title.toLowerCase().includes(search);
+      const inNotes = (g.notes || '').toLowerCase().includes(search);
+      if (!inTitle && !inNotes) return false;
+    }
     if (statusVal && g.status !== statusVal) return false;
     if (prioVal && g.priority !== prioVal) return false;
     return true;
@@ -884,6 +947,7 @@ function renderTable(){
   if (list.length === 0){
     tbody.innerHTML = '';
     mobileCards.innerHTML = '';
+    document.getElementById('coverGrid').innerHTML = '';
     emptyState.style.display = 'block';
     emptyStateMobile.style.display = 'block';
     return;
@@ -894,6 +958,7 @@ function renderTable(){
   tbody.innerHTML = list.map(g => {
     const color = STATUS_COLORS[g.status] || '#565f78';
     return `<tr data-id="${g.id}">
+      <td class="row-cover-cell">${g.cover ? `<img class="row-cover" src="${g.cover}" alt="">` : ''}</td>
       <td class="title-cell">${escapeHtml(g.title)}${g.platform ? `<span class="platform-tag">${escapeHtml(g.platform)}</span>` : ''}</td>
       <td><span class="status-pill" style="background:${color}22; color:${color}; border:1px solid ${color}55;">${g.status||'–'}</span></td>
       <td class="prio-tag">${(g.status === 'Noch zocken' && g.priority) ? g.priority.replace(/^[0-9]+\\.\\s*/,'') : '<span class="muted">–</span>'}</td>
@@ -913,7 +978,8 @@ function renderTable(){
     const prio = (g.status === 'Noch zocken' && g.priority) ? g.priority.replace(/^[0-9]+\.\s*/,'') : null;
     return `<div class="mcard" data-id="${g.id}">
       <div class="mcard-top">
-        <span class="mcard-title">${escapeHtml(g.title)}</span>
+        ${g.cover ? `<img class="mcard-cover" src="${g.cover}" alt="">` : ''}
+        <span class="mcard-title" style="flex:1;">${escapeHtml(g.title)}</span>
         <span class="status-pill" style="background:${color}22; color:${color}; border:1px solid ${color}55; flex-shrink:0;">${g.status||'–'}</span>
       </div>
       <div class="mcard-meta">
@@ -929,6 +995,32 @@ function renderTable(){
 
   mobileCards.querySelectorAll('.mcard').forEach(card => {
     card.addEventListener('click', () => openEdit(card.dataset.id));
+  });
+
+  renderCoverGrid(list);
+}
+
+function renderCoverGrid(list){
+  const grid = document.getElementById('coverGrid');
+  grid.innerHTML = list.map(g => {
+    const color = STATUS_COLORS[g.status] || '#565f78';
+    const prio = (g.status === 'Noch zocken' && g.priority) ? g.priority.replace(/^[0-9]+\.\s*/,'') : null;
+    return `<div class="ctile" data-id="${g.id}">
+      ${g.cover ? `<img src="${g.cover}" alt="">` : `<div class="ctile-noimg">${escapeHtml(g.title)}</div>`}
+      <span class="ctile-status" style="background:${color}dd; color:#fff;">${g.status||'–'}</span>
+      <div class="ctile-title">${escapeHtml(g.title)}</div>
+      <div class="ctile-overlay">
+        <div><b>Status:</b> ${g.status||'–'}</div>
+        ${prio ? `<div><b>Priorität:</b> ${escapeHtml(prio)}</div>` : ''}
+        <div><b>Preis:</b> ${g.price ? parseFloat(g.price).toFixed(2)+' €' : '–'}</div>
+        <div><b>Fazit:</b> ${g.verdict || '–'}</div>
+        <div><b>Durchgezockt:</b> ${g.finished || '–'}</div>
+        <div><b>Sprache:</b> ${g.lang || '–'}</div>
+      </div>
+    </div>`;
+  }).join('');
+  grid.querySelectorAll('.ctile').forEach(tile => {
+    tile.addEventListener('click', () => openEdit(tile.dataset.id));
   });
 }
 
@@ -1022,6 +1114,10 @@ document.getElementById('gameForm').addEventListener('submit', (e) => {
       const idx = games.findIndex(g => g.id === id);
       if (idx > -1) games[idx] = {...games[idx], ...data};
     } else {
+      const dup = games.find(g => g.title.trim().toLowerCase() === data.title.toLowerCase());
+      if (dup && !confirm(`"${data.title}" ist schon in deiner Liste (Status: ${dup.status || '–'}). Trotzdem als neuer Eintrag hinzufügen?`)){
+        return;
+      }
       games.push({ id: uid(), ...data });
     }
     closeModal();
@@ -1035,6 +1131,8 @@ document.getElementById('gameForm').addEventListener('submit', (e) => {
 
 document.getElementById('deleteBtn').addEventListener('click', () => {
   const id = document.getElementById('gameId').value;
+  const g = games.find(x => x.id === id);
+  if (!confirm(`"${g ? g.title : 'Dieses Spiel'}" wirklich unwiderruflich löschen?`)) return;
   games = games.filter(g => g.id !== id);
   closeModal();
   render();
@@ -1110,6 +1208,56 @@ document.getElementById('importFile').addEventListener('change', (e) => {
   };
   reader.readAsText(file);
   e.target.value = '';
+});
+
+/* ---------- CSV export ---------- */
+function csvEscape(val){
+  const s = String(val ?? '');
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g,'""') + '"';
+  return s;
+}
+document.getElementById('csvExportBtn').addEventListener('click', () => {
+  const cols = ['title','status','priority','platform','acquire','price','wishprice','verdict','finished','duration','lang','releasedate','notes'];
+  const header = ['Titel','Status','Priorität','Plattform','Bezugsart','Preis','Wunschpreis','Fazit','Durchgezockt am','Dauer','Sprache','Release','Bemerkungen'];
+  const rows = [header.join(',')].concat(games.map(g => cols.map(c => csvEscape(g[c])).join(',')));
+  const blob = new Blob(['\uFEFF' + rows.join('\r\n')], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'zockerliste-' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+/* ---------- View switcher (Liste / Cover) ---------- */
+let currentView = localStorage.getItem('zl_view') || 'list';
+function applyView(){
+  const isGrid = currentView === 'grid';
+  document.getElementById('viewListBtn').classList.toggle('active', !isGrid);
+  document.getElementById('viewGridBtn').classList.toggle('active', isGrid);
+  document.getElementById('coverGrid').style.display = isGrid ? 'grid' : 'none';
+  document.getElementById('listViewDesktop').style.display = isGrid ? 'none' : '';
+  document.getElementById('mobileCards').style.display = isGrid ? 'none' : '';
+}
+document.getElementById('viewListBtn').addEventListener('click', () => {
+  currentView = 'list'; localStorage.setItem('zl_view', currentView); applyView();
+});
+document.getElementById('viewGridBtn').addEventListener('click', () => {
+  currentView = 'grid'; localStorage.setItem('zl_view', currentView); applyView();
+});
+applyView();
+
+/* ---------- Theme (Akzentfarbe) ---------- */
+const savedTheme = localStorage.getItem('zl_theme') || 'blue';
+document.getElementById('themeSelect').value = savedTheme;
+if (savedTheme !== 'blue') document.body.setAttribute('data-theme', savedTheme);
+document.getElementById('themeSelect').addEventListener('change', (e) => {
+  const t = e.target.value;
+  if (t === 'blue') document.body.removeAttribute('data-theme');
+  else document.body.setAttribute('data-theme', t);
+  localStorage.setItem('zl_theme', t);
 });
 
 /* ---------- In-modal database search ---------- */
@@ -1211,13 +1359,28 @@ function renderSales(){
       <span class="watch-title">${escapeHtml(g.title)}</span>
       ${g.wishprice ? `<span class="muted">Wunschpreis: ${parseFloat(g.wishprice).toFixed(2)} €</span>` : ''}
       <div class="watch-links">
-        <a href="https://www.keyforsteam.de/?search=${q}" target="_blank" rel="noopener">Keyforsteam</a>
+        <button class="copy-title-btn" type="button" data-title="${escapeHtml(g.title)}" title="Titel kopieren, dann bei Keyforsteam einfügen">📋 Titel kopieren</button>
+        <a href="https://www.keyforsteam.de/" target="_blank" rel="noopener">Keyforsteam</a>
         <a href="https://www.instant-gaming.com/de/suche/?q=${q}" target="_blank" rel="noopener">Instant-Gaming</a>
         <a href="https://www.kinguin.net/listing?active=0&search=${q}" target="_blank" rel="noopener">Kinguin</a>
         <a href="https://www.eneba.com/store/all?text=${q}" target="_blank" rel="noopener">Eneba</a>
+        <a href="https://www.cdkeys.com/catalogsearch/result/?q=${q}" target="_blank" rel="noopener">CDKeys</a>
       </div>
     </div>`;
   }).join('');
+
+  list.querySelectorAll('.copy-title-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try{
+        await navigator.clipboard.writeText(btn.dataset.title);
+        const orig = btn.textContent;
+        btn.textContent = '✓ Kopiert';
+        setTimeout(() => { btn.textContent = orig; }, 1500);
+      }catch(e){
+        alert('Kopieren nicht möglich - Titel: ' + btn.dataset.title);
+      }
+    });
+  });
 }
 
 /* ---------- Tabs ---------- */
@@ -1240,6 +1403,60 @@ const MONTH_NAMES_DE = ['Januar','Februar','März','April','Mai','Juni','Juli','
 
 /* ---------- Release calendar (local data, grouped by month) ---------- */
 let calSelectedMonth = 'alle';
+
+/* ---------- Datenbank-Abgleich für die ganze Liste (nur Cover + Releasedatum) ---------- */
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+async function syncAllWithDatabase(){
+  if (dataSource === 'rawg' && !rawgKey){
+    try{
+      const res = await window.storage.get('rawg_api_key', false);
+      rawgKey = res && res.value ? res.value : null;
+    }catch(e){ rawgKey = null; }
+    if (!rawgKey){ rawgKey = DEFAULT_RAWG_KEY; }
+  }
+  const total = games.length;
+  const progressEl = document.getElementById('syncProgress');
+  progressEl.style.display = 'block';
+  let updated = 0, notFound = 0;
+
+  for (let i = 0; i < total; i++){
+    const g = games[i];
+    progressEl.textContent = `Gleiche ab (${dataSource === 'igdb' ? 'IGDB' : 'RAWG'})... ${i+1} / ${total} - zuletzt: ${g.title}`;
+    try{
+      const res = await fetch(buildSourceUrl('search', { q: g.title }));
+      if (res.ok){
+        const data = await res.json();
+        const results = data.results || [];
+        const exact = results.find(r => r.name.toLowerCase() === g.title.toLowerCase());
+        const match = exact || results[0];
+        if (match){
+          if (match.background_image) g.cover = match.background_image;
+          if (match.released) g.releasedate = match.released;
+          if (match.genres && match.genres.length && !g.genre) g.genre = match.genres.map(x=>x.name).join(', ');
+          updated++;
+        } else {
+          notFound++;
+        }
+      } else {
+        notFound++;
+      }
+    }catch(e){
+      notFound++;
+    }
+    await sleep(120);
+  }
+
+  progressEl.textContent = `Fertig! ${updated} Spiele aktualisiert (Cover/Releasedatum), ${notFound} nicht gefunden.`;
+  render();
+  await saveGames();
+  setTimeout(() => { progressEl.style.display = 'none'; }, 6000);
+}
+
+document.getElementById('syncDbBtn').addEventListener('click', () => {
+  if (!confirm(`Alle ${games.length} Spiele gegen ${dataSource === 'igdb' ? 'IGDB' : 'RAWG'} abgleichen? Nur Cover und Releasedatum werden aktualisiert, Status/Priorität/Fazit etc. bleiben unverändert. Das kann je nach Anzahl einige Minuten dauern.`)) return;
+  syncAllWithDatabase();
+});
 
 function renderKalender(){
   const today = new Date().toISOString().slice(0,10);
@@ -1512,41 +1729,53 @@ function renderDbGrid(results){
       <div class="db-body">
         <div class="db-title">${escapeHtml(r.name)}</div>
         <div class="db-date">${r.released || 'TBA'}</div>
-        <button class="db-heart ${already?'added':''}" data-id="${r.id}" ${already?'disabled':''}>${already ? '✓ In deiner Liste' : '❤ Zur Liste hinzufügen'}</button>
+        <button class="db-heart ${already?'added':''}" data-id="${r.id}">${already ? '✓ In deiner Liste (entfernen)' : '❤ Zur Liste hinzufügen'}</button>
       </div>
     </div>`;
   }).join('');
 
-  grid.querySelectorAll('.db-heart:not(.added)').forEach(btn => {
-    btn.addEventListener('click', async () => {
+  grid.querySelectorAll('.db-heart').forEach(btn => {
+    btn.addEventListener('click', () => {
       const r = results.find(x => String(x.id) === btn.dataset.id);
       if (!r) return;
-      const today = new Date().toISOString().slice(0,10);
-      games.push({
-        id: uid(),
-        title: r.name,
-        status: (r.released && r.released <= today) ? 'Noch zocken' : 'Kommt noch',
-        priority: '',
-        acquire: '',
-        price: '',
-        wishprice: '',
-        verdict: '',
-        finished: '',
-        duration: '',
-        lang: '',
-        releasedate: r.released || '',
-        notes: 'Aus RAWG-Datenbank hinzugefügt',
-        cover: r.background_image || '',
-        genre: (r.genres || []).map(g => g.name).join(', '),
-        platform: '',
-      });
-      btn.textContent = '✓ In deiner Liste';
-      btn.classList.add('added');
-      btn.disabled = true;
-      render();
-      saveGames().catch(err => console.error('Hintergrund-Speichern fehlgeschlagen', err));
+      toggleGameFromDbResult(r, btn);
     });
   });
+}
+
+// Fügt ein Datenbank-Ergebnis hinzu, oder entfernt es wieder, falls schon in der Liste (Herz-Toggle)
+function toggleGameFromDbResult(r, btn){
+  const idx = games.findIndex(g => g.title.toLowerCase() === r.name.toLowerCase());
+  if (idx > -1){
+    if (!confirm(`"${r.name}" wieder aus deiner Liste entfernen?`)) return;
+    games.splice(idx, 1);
+    btn.textContent = '❤ Zur Liste hinzufügen';
+    btn.classList.remove('added');
+  } else {
+    const today = new Date().toISOString().slice(0,10);
+    games.push({
+      id: uid(),
+      title: r.name,
+      status: (r.released && r.released <= today) ? 'Noch zocken' : 'Kommt noch',
+      priority: '',
+      acquire: '',
+      price: '',
+      wishprice: '',
+      verdict: '',
+      finished: '',
+      duration: '',
+      lang: '',
+      releasedate: r.released || '',
+      notes: 'Aus Datenbank hinzugefügt',
+      cover: r.background_image || '',
+      genre: (r.genres || []).map(g => g.name).join(', '),
+      platform: '',
+    });
+    btn.textContent = '✓ In deiner Liste (entfernen)';
+    btn.classList.add('added');
+  }
+  render();
+  saveGames().catch(err => console.error('Hintergrund-Speichern fehlgeschlagen', err));
 }
 
 /* ---------- Statistics ---------- */
@@ -1588,27 +1817,58 @@ function renderStats(){
   });
   const years = Object.keys(byYearHours).sort();
 
-  if (chartHoursInstance) chartHoursInstance.destroy();
-  if (chartSpendInstance) chartSpendInstance.destroy();
-
-  const chartOpts = {
-    plugins:{legend:{display:false}},
-    scales:{
-      x:{ticks:{color:'#8a92ab'}, grid:{color:'#262e42'}},
-      y:{ticks:{color:'#8a92ab'}, grid:{color:'#262e42'}, beginAtZero:true}
+  // Backlog-Hochrechnung: Ø Stunden/Jahr der letzten Jahre mit Daten, geteilt durch geschätzte Backlog-Stunden
+  const backlogCard = document.getElementById('backlogProjectionCard');
+  if (years.length > 0 && backlogCount > 0){
+    const avgHoursPerYear = years.reduce((s,y)=>s+byYearHours[y],0) / years.length;
+    const backlogHoursKnown = games.filter(g => ['Noch zocken','Am zocken','Pausiert','Kommt noch'].includes(g.status) && parseFloat(g.duration)>0);
+    const avgHoursPerGame = backlogHoursKnown.length ? backlogHoursKnown.reduce((s,g)=>s+parseFloat(g.duration),0)/backlogHoursKnown.length : 20;
+    const estBacklogHours = backlogCount * avgHoursPerGame;
+    if (avgHoursPerYear > 0){
+      const yearsNeeded = (estBacklogHours / avgHoursPerYear).toFixed(1);
+      backlogCard.innerHTML = `<h3>⏳ Backlog-Hochrechnung</h3>
+        <p style="font-size:14px; color:var(--text);">Bei deinem bisherigen Tempo (Ø ${avgHoursPerYear.toFixed(0)} Std./Jahr) brauchst du grob <b style="color:var(--royal-hi);">${yearsNeeded} Jahre</b>, um deine ${backlogCount} Backlog-Spiele abzuarbeiten.</p>
+        <p class="tab-hint" style="margin:4px 0 0;">Grobe Schätzung auf Basis der erfassten Spielzeiten - keine exakte Vorhersage.</p>`;
+    } else {
+      backlogCard.innerHTML = '';
     }
-  };
+  } else {
+    backlogCard.innerHTML = '';
+  }
 
-  chartHoursInstance = new Chart(document.getElementById('chartHours'), {
-    type:'bar',
-    data:{labels:years, datasets:[{data:years.map(y=>byYearHours[y]), backgroundColor:'#3355ee'}]},
-    options:chartOpts
-  });
-  chartSpendInstance = new Chart(document.getElementById('chartSpend'), {
-    type:'bar',
-    data:{labels:years, datasets:[{data:years.map(y=>byYearSpend[y].toFixed(2)), backgroundColor:'#e8a33d'}]},
-    options:chartOpts
-  });
+  // Charts - robust gegen Chart.js-Ladefehler, damit der Rest der Seite trotzdem funktioniert
+  try{
+    if (typeof Chart === 'undefined') throw new Error('Chart.js nicht geladen');
+    if (chartHoursInstance) chartHoursInstance.destroy();
+    if (chartSpendInstance) chartSpendInstance.destroy();
+
+    const chartOpts = {
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#8a92ab'}, grid:{color:'#262e42'}},
+        y:{ticks:{color:'#8a92ab'}, grid:{color:'#262e42'}, beginAtZero:true}
+      }
+    };
+
+    chartHoursInstance = new Chart(document.getElementById('chartHours'), {
+      type:'bar',
+      data:{labels:years, datasets:[{data:years.map(y=>byYearHours[y]), backgroundColor:'#3355ee'}]},
+      options:chartOpts
+    });
+    chartSpendInstance = new Chart(document.getElementById('chartSpend'), {
+      type:'bar',
+      data:{labels:years, datasets:[{data:years.map(y=>byYearSpend[y].toFixed(2)), backgroundColor:'#e8a33d'}]},
+      options:chartOpts
+    });
+  }catch(err){
+    console.error('Chart-Rendering fehlgeschlagen', err);
+    ['chartHours','chartSpend'].forEach(id => {
+      const canvas = document.getElementById(id);
+      if (canvas && canvas.parentElement){
+        canvas.parentElement.insertAdjacentHTML('beforeend', '<p class="tab-hint" style="color:var(--red);">Diagramm konnte nicht geladen werden (Chart.js nicht erreichbar).</p>');
+      }
+    });
+  }
 
   // Top expensive / longest
   const topExpensive = [...games].filter(g=>parseFloat(g.price)>0).sort((a,b)=>(parseFloat(b.price)||0)-(parseFloat(a.price)||0)).slice(0,8);
@@ -1622,6 +1882,61 @@ function renderStats(){
     `<div class="rank-row"><span class="n">${escapeHtml(g.title)}</span><span class="v">${parseFloat(g.duration).toFixed(0)} Std.</span></div>`
   ).join('') || '<span class="muted">Keine Daten</span>';
 
+  // Genre-Auswertung (nur Spiele mit Genre-Info, meist aus Datenbank-Import)
+  const genreCounts = {};
+  games.forEach(g => {
+    if (g.genre){
+      g.genre.split(',').map(x=>x.trim()).filter(Boolean).forEach(genre => {
+        genreCounts[genre] = (genreCounts[genre]||0) + 1;
+      });
+    }
+  });
+  const genreEntries = Object.entries(genreCounts).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  document.getElementById('genreBars').innerHTML = genreEntries.length
+    ? genreEntries.map(([genre,count]) => `<div class="rank-row"><span class="n">${escapeHtml(genre)}</span><span class="v">${count}</span></div>`).join('')
+    : '<span class="muted">Noch keine Genre-Daten - füge Spiele über die Datenbank-Suche hinzu, damit hier was erscheint.</span>';
+
+  // Jahresrückblick
+  renderYearWrap();
+
+  renderHallOfFameAndRecommendations(finished);
+}
+
+function renderYearWrap(){
+  const yearsWithData = [...new Set(games.filter(g=>g.finished).map(g=>g.finished.slice(0,4)))].sort().reverse();
+  const sel = document.getElementById('wrapYearSelect');
+  const content = document.getElementById('yearWrapContent');
+  if (yearsWithData.length === 0){
+    sel.innerHTML = '';
+    content.innerHTML = '<span class="muted">Noch keine durchgezockten Spiele mit Datum erfasst.</span>';
+    return;
+  }
+  const curVal = sel.value && yearsWithData.includes(sel.value) ? sel.value : yearsWithData[0];
+  sel.innerHTML = yearsWithData.map(y => `<option value="${y}" ${y===curVal?'selected':''}>${y}</option>`).join('');
+
+  const renderForYear = (year) => {
+    const yearGames = games.filter(g => g.finished && g.finished.slice(0,4) === year);
+    const hours = yearGames.reduce((s,g)=>s+(parseFloat(g.duration)||0),0);
+    const spent = yearGames.reduce((s,g)=>s+(parseFloat(g.price)||0),0);
+    const genreCounts = {};
+    yearGames.forEach(g => { if (g.genre) g.genre.split(',').map(x=>x.trim()).filter(Boolean).forEach(gr => genreCounts[gr]=(genreCounts[gr]||0)+1); });
+    const topGenre = Object.entries(genreCounts).sort((a,b)=>b[1]-a[1])[0];
+    const priciest = [...yearGames].filter(g=>parseFloat(g.price)>0).sort((a,b)=>(parseFloat(b.price)||0)-(parseFloat(a.price)||0))[0];
+    content.innerHTML = `
+      <div class="stat-grid" style="margin-bottom:0;">
+        <div class="stat-card"><div class="val">${yearGames.length}</div><div class="lbl">Durchgezockt in ${year}</div></div>
+        <div class="stat-card"><div class="val">${hours.toFixed(0)} Std.</div><div class="lbl">Spielzeit</div></div>
+        <div class="stat-card"><div class="val">${spent.toFixed(2)} €</div><div class="lbl">Ausgegeben</div></div>
+        <div class="stat-card"><div class="val">${topGenre ? escapeHtml(topGenre[0]) : '–'}</div><div class="lbl">Top-Genre</div></div>
+      </div>
+      ${priciest ? `<p style="margin-top:14px; font-size:13px; color:var(--text-muted);">Teuerstes Spiel des Jahres: <b style="color:#fff;">${escapeHtml(priciest.title)}</b> (${parseFloat(priciest.price).toFixed(2)} €)</p>` : ''}
+    `;
+  };
+  renderForYear(curVal);
+  sel.onchange = () => renderForYear(sel.value);
+}
+
+function renderHallOfFameAndRecommendations(finished){
   // Hall of Fame: best-rated finished games (lower parsed verdict = better)
   const hof = finished
     .map(g => ({ g, score: parseVerdict(g.verdict) }))
@@ -1687,19 +2002,7 @@ async function renderRecommendations(hof){
       btn.addEventListener('click', () => {
         const r = results.find(x => String(x.id) === btn.dataset.id);
         if (!r) return;
-        const today = new Date().toISOString().slice(0,10);
-        games.push({
-          id: uid(), title: r.name,
-          status: (r.released && r.released <= today) ? 'Noch zocken' : 'Kommt noch',
-          priority: '', acquire: '', price: '', wishprice: '', verdict: '', finished: '',
-          duration: '', lang: '', releasedate: r.released || '',
-          notes: 'Aus Empfehlungen hinzugefügt', cover: r.background_image || '',
-          genre: (r.genres || []).map(g => g.name).join(', '), platform: '',
-        });
-        btn.textContent = '✓ Hinzugefügt';
-        btn.disabled = true;
-        render();
-        saveGames().catch(err => console.error('Hintergrund-Speichern fehlgeschlagen', err));
+        toggleGameFromDbResult(r, btn);
       });
     });
   }catch(err){
