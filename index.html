@@ -172,6 +172,10 @@
   }
   .cal-badge.upcoming{background:#e8a33d22; color:var(--gold); border:1px solid #e8a33d55;}
   .cal-badge.released{background:#3ecf8e22; color:var(--green); border:1px solid #3ecf8e55;}
+  .cal-countdown{
+    font-size:11.5px; font-family:'JetBrains Mono',monospace; font-weight:600; color:var(--royal-hi);
+    white-space:nowrap;
+  }
   .cal-trailer{
     color:var(--royal-hi); text-decoration:none; font-size:12.5px; font-weight:600;
     border:1px solid var(--royal-dim); padding:5px 11px; border-radius:6px; white-space:nowrap;
@@ -357,8 +361,13 @@
     display:flex; flex-direction:column; justify-content:center; gap:5px; padding:12px;
     font-size:11px; color:var(--text-muted); pointer-events:none;
   }
-  .ctile:hover .ctile-overlay{opacity:1;}
+  .ctile:hover .ctile-overlay{opacity:1; pointer-events:auto;}
   .ctile-overlay b{color:#fff;}
+  .ctile-hltb{
+    margin-top:6px; align-self:flex-start; color:var(--royal-hi); text-decoration:none;
+    font-size:11px; font-weight:600; border:1px solid var(--royal-dim); padding:5px 10px; border-radius:6px;
+  }
+  .ctile-hltb:hover{background:var(--royal-dim);}
 
   /* Sales tracker copy button */
   .copy-title-btn{
@@ -401,7 +410,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-13-video-v6</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-13-planner-v1</p>
     </div>
     <div class="header-actions">
       <button class="add-btn" id="openAdd">+ Spiel hinzufügen</button>
@@ -435,12 +444,30 @@
       <select id="statusFilter"><option value="">Alle Status</option></select>
       <select id="prioFilter"><option value="">Alle Prioritäten</option></select>
       <button class="btn btn-ghost" id="syncDbBtn" type="button" title="Cover, Releasedatum und Sprache aus der Datenbank nachziehen">🔄 Mit Datenbank abgleichen</button>
+      <button class="btn btn-ghost" id="plannerToggleBtn" type="button">⏳ Zeitplaner</button>
       <div class="view-switch">
         <button class="view-btn active" id="viewListBtn" type="button" title="Listenansicht">☰</button>
         <button class="view-btn" id="viewGridBtn" type="button" title="Cover-Ansicht">▦</button>
       </div>
     </div>
     <div id="syncProgress" class="tab-hint" style="display:none;"></div>
+
+    <div id="plannerPanel" class="table-card" style="display:none; padding:18px 20px; margin-bottom:20px;">
+      <h3 style="margin:0 0 4px; font-family:'Rajdhani',sans-serif; color:#fff;">⏳ Was schaffe ich noch?</h3>
+      <p class="tab-hint" style="margin:0 0 14px;">Gib an, wie viel Zeit dir bleibt - die App zeigt dir, welche Backlog-Spiele (nach eingetragener Dauer) realistisch reinpassen.</p>
+      <div class="filters" style="margin-bottom:14px;">
+        <div class="field" style="margin:0;">
+          <label>Zieldatum</label>
+          <input type="date" id="plannerDate">
+        </div>
+        <div class="field" style="margin:0;">
+          <label>Std. pro Tag</label>
+          <input type="number" id="plannerHoursPerDay" value="2" min="0" step="0.5" style="width:90px;">
+        </div>
+        <button class="btn btn-primary" id="plannerCalcBtn" type="button" style="align-self:flex-end;">Berechnen</button>
+      </div>
+      <div id="plannerResult"></div>
+    </div>
 
     <div class="table-card table-desktop" id="listViewDesktop">
       <table>
@@ -451,6 +478,7 @@
             <th data-sort="status">Status <span class="sort-arrow" data-col="status"></span></th>
             <th data-sort="priority">Priorität <span class="sort-arrow" data-col="priority"></span></th>
             <th data-sort="price">Preis <span class="sort-arrow" data-col="price"></span></th>
+            <th data-sort="duration">Dauer <span class="sort-arrow" data-col="duration"></span></th>
             <th data-sort="verdict">Fazit <span class="sort-arrow" data-col="verdict"></span></th>
             <th data-sort="finished">Durchgezockt <span class="sort-arrow" data-col="finished"></span></th>
             <th data-sort="lang">Sprache <span class="sort-arrow" data-col="lang"></span></th>
@@ -603,6 +631,7 @@
         <div style="display:flex; gap:8px;">
           <input type="text" id="f_title" required style="flex:1;">
           <button type="button" class="btn btn-ghost" id="dbSearchBtn" style="white-space:nowrap;">🔍 Datenbank</button>
+          <button type="button" class="btn btn-ghost" id="hltbBtn" style="white-space:nowrap;">⏱ HowLongToBeat</button>
         </div>
         <div id="dbSearchResults" class="db-search-results"></div>
       </div>
@@ -946,6 +975,7 @@ function renderTable(){
   list.sort((a,b)=>{
     let va = a[col] ?? '', vb = b[col] ?? '';
     if (col === 'price') { va = parseFloat(a.price)||0; vb = parseFloat(b.price)||0; return (va-vb)*mult; }
+    if (col === 'duration') { va = parseFloat(a.duration)||0; vb = parseFloat(b.duration)||0; return (va-vb)*mult; }
     return String(va).localeCompare(String(vb)) * mult;
   });
 
@@ -977,6 +1007,7 @@ function renderTable(){
       <td><span class="status-pill" style="background:${color}22; color:${color}; border:1px solid ${color}55;">${g.status||'–'}</span></td>
       <td class="prio-tag">${(g.status === 'Noch zocken' && g.priority) ? g.priority.replace(/^[0-9]+\\.\\s*/,'') : '<span class="muted">–</span>'}</td>
       <td>${g.price ? parseFloat(g.price).toFixed(2)+' €' : '<span class="muted">–</span>'}</td>
+      <td>${g.duration ? parseFloat(g.duration).toFixed(0)+' Std.' : '<span class="muted">–</span>'}</td>
       <td>${g.verdict || '<span class="muted">–</span>'}</td>
       <td>${g.finished || '<span class="muted">–</span>'}</td>
       <td class="muted">${g.lang || '–'}</td>
@@ -998,6 +1029,7 @@ function renderTable(){
       </div>
       <div class="mcard-meta">
         ${g.price ? `<span><b>${parseFloat(g.price).toFixed(2)} €</b></span>` : ''}
+        ${g.duration ? `<span><b>${parseFloat(g.duration).toFixed(0)} Std.</b></span>` : ''}
         ${g.verdict ? `<span>Fazit: <b>${escapeHtml(g.verdict)}</b></span>` : ''}
         ${prio ? `<span>Prio: <b>${escapeHtml(prio)}</b></span>` : ''}
         ${g.finished ? `<span>${g.finished}</span>` : ''}
@@ -1030,11 +1062,15 @@ function renderCoverGrid(list){
         <div><b>Fazit:</b> ${g.verdict || '–'}</div>
         <div><b>Durchgezockt:</b> ${g.finished || '–'}</div>
         <div><b>Sprache:</b> ${g.lang || '–'}</div>
+        <a class="ctile-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱ HLTB</a>
       </div>
     </div>`;
   }).join('');
   grid.querySelectorAll('.ctile').forEach(tile => {
     tile.addEventListener('click', () => openEdit(tile.dataset.id));
+  });
+  grid.querySelectorAll('.ctile-hltb').forEach(link => {
+    link.addEventListener('click', (e) => e.stopPropagation());
   });
 }
 
@@ -1275,6 +1311,12 @@ document.getElementById('themeSelect').addEventListener('change', (e) => {
 });
 
 /* ---------- In-modal database search ---------- */
+document.getElementById('hltbBtn').addEventListener('click', () => {
+  const title = document.getElementById('f_title').value.trim();
+  if (!title){ alert('Erst einen Titel eingeben.'); return; }
+  window.open('https://howlongtobeat.com/?q=' + encodeURIComponent(title), '_blank', 'noopener');
+});
+
 document.getElementById('dbSearchBtn').addEventListener('click', async () => {
   const q = document.getElementById('f_title').value.trim();
   const resultsEl = document.getElementById('dbSearchResults');
@@ -1471,6 +1513,52 @@ document.getElementById('syncDbBtn').addEventListener('click', () => {
   syncAllWithDatabase();
 });
 
+/* ---------- Zeitplaner ---------- */
+document.getElementById('plannerToggleBtn').addEventListener('click', () => {
+  const panel = document.getElementById('plannerPanel');
+  const show = panel.style.display === 'none';
+  panel.style.display = show ? 'block' : 'none';
+  if (show && !document.getElementById('plannerDate').value){
+    const nextRelease = games
+      .filter(g => g.releasedate && g.releasedate > new Date().toISOString().slice(0,10))
+      .sort((a,b) => a.releasedate.localeCompare(b.releasedate))[0];
+    if (nextRelease) document.getElementById('plannerDate').value = nextRelease.releasedate;
+  }
+});
+
+document.getElementById('plannerCalcBtn').addEventListener('click', () => {
+  const dateVal = document.getElementById('plannerDate').value;
+  const hoursPerDay = parseFloat(document.getElementById('plannerHoursPerDay').value) || 0;
+  const resultEl = document.getElementById('plannerResult');
+  if (!dateVal){ resultEl.innerHTML = '<p class="muted">Bitte ein Zieldatum wählen.</p>'; return; }
+
+  const today = new Date().toISOString().slice(0,10);
+  const days = Math.max(0, Math.ceil((new Date(dateVal) - new Date(today)) / 86400000));
+  const availableHours = days * hoursPerDay;
+
+  const backlog = games.filter(g => ['Noch zocken','Am zocken'].includes(g.status));
+  const withDuration = backlog.filter(g => parseFloat(g.duration) > 0).sort((a,b) => (parseFloat(a.duration)||0) - (parseFloat(b.duration)||0));
+  const withoutDuration = backlog.filter(g => !(parseFloat(g.duration) > 0));
+
+  const fits = withDuration.filter(g => parseFloat(g.duration) <= availableHours);
+  const tooLong = withDuration.filter(g => parseFloat(g.duration) > availableHours);
+
+  resultEl.innerHTML = `
+    <p style="font-size:14px; margin:0 0 12px;"><b style="color:var(--royal-hi);">${days} Tage</b> verbleibend · <b style="color:var(--royal-hi);">${availableHours.toFixed(0)} Std.</b> verfügbar (bei ${hoursPerDay} Std./Tag)</p>
+    <div class="two-col">
+      <div>
+        <h4 style="color:var(--green); font-size:13px; margin:0 0 8px;">✅ Passt rein (${fits.length})</h4>
+        <div class="rank-list">${fits.map(g => `<div class="rank-row"><span class="n">${escapeHtml(g.title)}</span><span class="v">${parseFloat(g.duration).toFixed(0)} Std.</span></div>`).join('') || '<span class="muted">Keine passenden Spiele mit erfasster Dauer.</span>'}</div>
+      </div>
+      <div>
+        <h4 style="color:var(--red); font-size:13px; margin:0 0 8px;">⏱ Wird knapp (${tooLong.length})</h4>
+        <div class="rank-list">${tooLong.map(g => `<div class="rank-row"><span class="n">${escapeHtml(g.title)}</span><span class="v">${parseFloat(g.duration).toFixed(0)} Std.</span></div>`).join('') || '<span class="muted">–</span>'}</div>
+      </div>
+    </div>
+    ${withoutDuration.length ? `<p class="tab-hint" style="margin-top:14px;">${withoutDuration.length} Backlog-Spiel(e) ohne eingetragene Dauer werden hier nicht berücksichtigt - trag die geschätzte Spielzeit im Bearbeiten-Dialog ein (z.B. von HowLongToBeat), damit sie hier auftauchen.</p>` : ''}
+  `;
+});
+
 function renderKalender(){
   const today = new Date().toISOString().slice(0,10);
   const showReleased = document.getElementById('showReleasedToo').checked;
@@ -1507,10 +1595,16 @@ function renderKalender(){
     const upcoming = g.releasedate > today;
     const dateFmt = new Date(g.releasedate).toLocaleDateString('de-DE', {day:'2-digit', month:'short', year:'numeric'});
     const trailerUrl = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(g.title + ' trailer');
+    let countdown = '';
+    if (upcoming){
+      const days = Math.ceil((new Date(g.releasedate) - new Date(today)) / 86400000);
+      countdown = `<span class="cal-countdown">${days === 0 ? 'heute' : days === 1 ? 'noch 1 Tag' : 'noch ' + days + ' Tage'}</span>`;
+    }
     return `<div class="cal-item">
       ${g.cover ? `<img class="cal-cover" src="${g.cover}" alt="">` : ''}
       <span class="cal-date">${dateFmt}</span>
       <span class="cal-title">${escapeHtml(g.title)}</span>
+      ${countdown}
       <span class="cal-badge ${upcoming ? 'upcoming' : 'released'}">${upcoming ? 'Kommt noch' : 'Erschienen'}</span>
       ${g.price ? `<span class="muted">${parseFloat(g.price).toFixed(2)} €</span>` : ''}
       <a class="cal-trailer" href="${trailerUrl}" target="_blank" rel="noopener">▶ Trailer</a>
