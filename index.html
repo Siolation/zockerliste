@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Zockerliste</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d1017">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
@@ -415,11 +419,12 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-13-hltb-v2</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-13-steam-pwa-v1</p>
     </div>
     <div class="header-actions">
       <button class="add-btn" id="openAdd">+ Spiel hinzufügen</button>
       <button class="btn btn-ghost" id="randomPickBtn" type="button">🎲 Was soll ich zocken?</button>
+      <button class="btn btn-ghost" id="steamImportBtn" type="button">🎮 Steam importieren</button>
       <button class="btn btn-ghost" id="exportBtn" type="button">⬇ JSON</button>
       <button class="btn btn-ghost" id="csvExportBtn" type="button">⬇ CSV</button>
       <button class="btn btn-ghost" id="importBtn" type="button">⬆ Import</button>
@@ -1008,7 +1013,7 @@ function renderTable(){
     const color = STATUS_COLORS[g.status] || '#565f78';
     return `<tr data-id="${g.id}">
       <td class="row-cover-cell">${g.cover ? `<img class="row-cover" src="${g.cover}" alt="">` : ''}</td>
-      <td class="title-cell">${escapeHtml(g.title)}${g.platform ? `<span class="platform-tag">${escapeHtml(g.platform)}</span>` : ''}<a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></td>
+      <td class="title-cell">${escapeHtml(g.title)}${g.platform ? `<span class="platform-tag">${escapeHtml(g.platform)}</span>` : ''}${g.source === 'steam' ? `<span class="platform-tag" title="Von Steam importiert">🎮 Steam</span>` : ''}<a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></td>
       <td><span class="status-pill" style="background:${color}22; color:${color}; border:1px solid ${color}55;">${g.status||'–'}</span></td>
       <td class="prio-tag">${(g.status === 'Noch zocken' && g.priority) ? g.priority.replace(/^[0-9]+\\.\\s*/,'') : '<span class="muted">–</span>'}</td>
       <td>${g.price ? parseFloat(g.price).toFixed(2)+' €' : '<span class="muted">–</span>'}</td>
@@ -1402,14 +1407,77 @@ function exportIcs(){
 document.getElementById('icsExportBtn').addEventListener('click', exportIcs);
 document.getElementById('showReleasedToo').addEventListener('change', () => { calSelectedMonth = 'alle'; renderKalender(); });
 
+const PRIORITY_WEIGHTS = {
+  '1. Must Have': 4,
+  '2. Nach Must Have': 3,
+  '3. Wenn Zeit da ist': 2,
+  '4. Bei Langeweile': 1,
+  '5. Kommt noch': 1,
+};
+
 document.getElementById('randomPickBtn').addEventListener('click', () => {
   const pool = games.filter(g => g.status === 'Noch zocken');
   if (pool.length === 0){
     alert('Keine Spiele mit Status "Noch zocken" gefunden.');
     return;
   }
-  const pick = pool[Math.floor(Math.random() * pool.length)];
+  // Gewichtete Auswahl: höhere Priorität kommt häufiger dran, ohne niedrigere komplett auszuschließen
+  const weighted = [];
+  pool.forEach(g => {
+    const weight = PRIORITY_WEIGHTS[g.priority] || 1;
+    for (let i=0; i<weight; i++) weighted.push(g);
+  });
+  const pick = weighted[Math.floor(Math.random() * weighted.length)];
   alert('🎲 Die Wahl ist gefallen:\n\n' + pick.title);
+});
+
+/* ---------- Steam-Bibliothek importieren ---------- */
+document.getElementById('steamImportBtn').addEventListener('click', async () => {
+  if (!confirm('Deine Steam-Bibliothek importieren? Bereits vorhandene Titel (gleicher Name) werden übersprungen.')) return;
+  const btn = document.getElementById('steamImportBtn');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ Lade Steam-Bibliothek...';
+  try{
+    const res = await fetch(`${IGDB_PROXY_URL}?action=steam`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const steamGames = data.results || [];
+    const existingTitles = new Set(games.map(g => g.title.toLowerCase()));
+    let added = 0, skipped = 0;
+    steamGames.forEach(sg => {
+      if (existingTitles.has(sg.name.toLowerCase())){ skipped++; return; }
+      games.push({
+        id: uid(),
+        title: sg.name,
+        status: 'Noch zocken',
+        priority: '',
+        acquire: 'Gekauft',
+        price: '',
+        wishprice: '',
+        verdict: '',
+        finished: '',
+        duration: sg.playtime_hours > 0 ? sg.playtime_hours : '',
+        lang: '',
+        releasedate: '',
+        notes: sg.playtime_hours > 0 ? `Von Steam importiert (${sg.playtime_hours} Std. gespielt)` : 'Von Steam importiert',
+        cover: sg.background_image,
+        genre: '',
+        platform: 'PC',
+        source: 'steam',
+      });
+      existingTitles.add(sg.name.toLowerCase());
+      added++;
+    });
+    render();
+    await saveGames();
+    alert(`✅ Steam-Import fertig: ${added} neue Spiele hinzugefügt, ${skipped} bereits vorhanden übersprungen.`);
+  }catch(err){
+    alert('Steam-Import fehlgeschlagen: ' + err.message);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
 });
 
 /* ---------- Sales Tracker ---------- */
@@ -2598,6 +2666,12 @@ async function renderRecommendations(hof){
   }
 }
 
+// PWA: Service Worker registrieren, damit die Seite installierbar wird
+if ('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => console.error('Service Worker Registrierung fehlgeschlagen', err));
+  });
+}
 </script>
 </body>
 </html>
