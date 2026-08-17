@@ -257,6 +257,9 @@
     opacity:0.7;
   }
   .row-hltb:hover{opacity:1;}
+  .steam-badge{
+    width:14px; height:14px; margin-left:6px; vertical-align:middle; opacity:0.85;
+  }
 
   /* Progress bar */
   .progress-wrap{margin-bottom:20px;}
@@ -419,7 +422,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-13-steam-pwa-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-16-steamicon-v1</p>
     </div>
     <div class="header-actions">
       <button class="add-btn" id="openAdd">+ Spiel hinzufügen</button>
@@ -1013,7 +1016,7 @@ function renderTable(){
     const color = STATUS_COLORS[g.status] || '#565f78';
     return `<tr data-id="${g.id}">
       <td class="row-cover-cell">${g.cover ? `<img class="row-cover" src="${g.cover}" alt="">` : ''}</td>
-      <td class="title-cell">${escapeHtml(g.title)}${g.platform ? `<span class="platform-tag">${escapeHtml(g.platform)}</span>` : ''}${g.source === 'steam' ? `<span class="platform-tag" title="Von Steam importiert">🎮 Steam</span>` : ''}<a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></td>
+      <td class="title-cell">${escapeHtml(g.title)}${(g.platform && !(g.source === 'steam' && g.platform === 'PC')) ? `<span class="platform-tag">${escapeHtml(g.platform)}</span>` : ''}${g.source === 'steam' ? `<img class="steam-badge" src="steam-icon.png" title="Von Steam importiert" alt="Steam">` : ''}<a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></td>
       <td><span class="status-pill" style="background:${color}22; color:${color}; border:1px solid ${color}55;">${g.status||'–'}</span></td>
       <td class="prio-tag">${(g.status === 'Noch zocken' && g.priority) ? g.priority.replace(/^[0-9]+\\.\\s*/,'') : '<span class="muted">–</span>'}</td>
       <td>${g.price ? parseFloat(g.price).toFixed(2)+' €' : '<span class="muted">–</span>'}</td>
@@ -1047,7 +1050,8 @@ function renderTable(){
         ${prio ? `<span>Prio: <b>${escapeHtml(prio)}</b></span>` : ''}
         ${g.finished ? `<span>${g.finished}</span>` : ''}
         ${g.lang ? `<span>${g.lang}</span>` : ''}
-        ${g.platform ? `<span>${escapeHtml(g.platform)}</span>` : ''}
+        ${(g.platform && !(g.source === 'steam' && g.platform === 'PC')) ? `<span>${escapeHtml(g.platform)}</span>` : ''}
+        ${g.source === 'steam' ? `<img class="steam-badge" src="steam-icon.png" title="Von Steam importiert" alt="Steam">` : ''}
       </div>
     </div>`;
   }).join('');
