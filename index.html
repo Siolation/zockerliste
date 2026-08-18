@@ -43,7 +43,46 @@
 
   /* Header */
   header{display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:28px; flex-wrap:wrap;}
-  header .header-actions{display:flex; gap:10px; flex-wrap:wrap;}
+  header .header-actions{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+  .hamburger-btn{
+    background:var(--bg-elev); border:1px solid var(--line); color:var(--text);
+    width:42px; height:42px; border-radius:9px; font-size:19px; cursor:pointer;
+    margin-right:6px; flex-shrink:0; order:-1;
+  }
+  .hamburger-btn:hover{border-color:var(--royal-hi); color:var(--royal-hi);}
+  .logout-icon-btn{
+    background:var(--bg-elev); border:1px solid var(--line); color:var(--text-muted);
+    width:40px; height:40px; border-radius:50%; font-size:17px; cursor:pointer; flex-shrink:0;
+  }
+  .logout-icon-btn:hover{border-color:var(--red); color:var(--red);}
+
+  /* Side drawer (Seitenmenü) */
+  .side-drawer-overlay{position:fixed; inset:0; background:rgba(6,8,14,0.65); z-index:120;}
+  .side-drawer{
+    position:fixed; top:0; left:0; bottom:0; width:280px; max-width:85vw;
+    background:var(--bg-elev); border-right:1px solid var(--line); z-index:130;
+    transform:translateX(-100%); transition:transform .22s ease; overflow-y:auto;
+    padding:0 0 24px;
+  }
+  .side-drawer.open{transform:translateX(0);}
+  .side-drawer-header{
+    display:flex; justify-content:space-between; align-items:center; padding:18px 20px;
+    border-bottom:1px solid var(--line); font-family:'Rajdhani',sans-serif; font-weight:700;
+    font-size:16px; color:#fff; position:sticky; top:0; background:var(--bg-elev);
+  }
+  .drawer-close-btn{background:none; border:none; color:var(--text-muted); font-size:18px; cursor:pointer;}
+  .side-drawer-section{padding:16px 20px; border-bottom:1px solid var(--line);}
+  .side-drawer-section:last-child{border-bottom:none;}
+  .side-drawer-label{
+    font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-faint);
+    margin-bottom:10px; font-family:'Rajdhani',sans-serif; font-weight:600;
+  }
+  .drawer-item{
+    display:flex; align-items:center; width:100%; text-align:left; background:none; border:none;
+    color:var(--text); padding:10px 8px; border-radius:7px; cursor:pointer; font-size:14px;
+    font-family:'Inter',sans-serif; margin-bottom:2px;
+  }
+  .drawer-item:hover{background:var(--bg-elev2); color:#fff;}
   .brand h1{
     font-family:'Rajdhani', sans-serif; font-weight:700; font-size:38px; letter-spacing:0.5px;
     margin:0; color:#fff; text-transform:uppercase;
@@ -474,30 +513,52 @@
 
 <div class="wrap" id="mainApp" style="display:none;">
   <header>
+    <button class="hamburger-btn" id="hamburgerBtn" type="button" title="Menü">☰</button>
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-17-bigupdate-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-18-drawer-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
       <button class="add-btn" id="openAdd">+ Spiel hinzufügen</button>
       <button class="btn btn-ghost" id="randomPickBtn" type="button">🎲 Was soll ich zocken?</button>
-      <button class="btn btn-ghost" id="steamImportBtn" type="button"><img class="steam-badge" src="steam-icon.png" alt="" style="margin-left:0; margin-right:6px;">Steam importieren</button>
-      <button class="btn btn-ghost" id="exportBtn" type="button">⬇ JSON</button>
-      <button class="btn btn-ghost" id="csvExportBtn" type="button">⬇ CSV</button>
-      <button class="btn btn-ghost" id="importBtn" type="button">⬆ Import</button>
+      <button class="logout-icon-btn" id="logoutBtn" type="button" title="Abmelden">⏻</button>
+    </div>
+  </header>
+
+  <div class="side-drawer-overlay" id="sideDrawerOverlay" style="display:none;"></div>
+  <nav class="side-drawer" id="sideDrawer">
+    <div class="side-drawer-header">
+      <span>Menü</span>
+      <button class="drawer-close-btn" id="drawerCloseBtn" type="button">✕</button>
+    </div>
+    <div class="side-drawer-section">
+      <div class="side-drawer-label">Import / Export</div>
+      <button class="drawer-item" id="steamImportBtn" type="button"><img class="steam-badge" src="steam-icon.png" alt="" style="margin-left:0; margin-right:8px;">Steam importieren</button>
+      <button class="drawer-item" id="exportBtn" type="button">⬇ JSON-Export</button>
+      <button class="drawer-item" id="csvExportBtn" type="button">⬇ CSV-Export</button>
+      <button class="drawer-item" id="importBtn" type="button">⬆ Import</button>
       <input type="file" id="importFile" accept=".json" style="display:none;">
-      <select id="themeSelect" title="Akzentfarbe">
+    </div>
+    <div class="side-drawer-section">
+      <div class="side-drawer-label">Werkzeuge</div>
+      <button class="drawer-item" id="syncDbBtn" type="button">🔄 Mit Datenbank abgleichen</button>
+      <button class="drawer-item" id="plannerToggleBtn" type="button">⏳ Zeitplaner</button>
+      <button class="drawer-item" id="dupCheckBtn" type="button">🔍 Duplikate prüfen</button>
+      <button class="drawer-item" id="steamRecentBtn" type="button"><img class="steam-badge" src="steam-icon.png" alt="" style="margin-left:0; margin-right:8px;">Zuletzt gespielt</button>
+    </div>
+    <div class="side-drawer-section">
+      <div class="side-drawer-label">Darstellung</div>
+      <select id="themeSelect" title="Akzentfarbe" style="width:100%;">
         <option value="blue">🔵 Königsblau</option>
         <option value="purple">🟣 Violett</option>
         <option value="green">🟢 Smaragd</option>
         <option value="red">🔴 Rubin</option>
         <option value="gold">🟡 Gold</option>
       </select>
-      <button class="btn btn-ghost" id="logoutBtn" type="button">Abmelden</button>
     </div>
-  </header>
+  </nav>
 
   <nav class="tabs">
     <button class="tab-btn active" data-tab="liste">Liste</button>
@@ -515,12 +576,8 @@
       <input type="text" id="searchInput" placeholder="Titel oder Bemerkung suchen...">
       <select id="statusFilter"><option value="">Alle Status</option></select>
       <select id="prioFilter"><option value="">Alle Prioritäten</option></select>
-      <button class="btn btn-ghost" id="syncDbBtn" type="button" title="Cover, Releasedatum und Sprache aus der Datenbank nachziehen">🔄 Mit Datenbank abgleichen</button>
-      <button class="btn btn-ghost" id="plannerToggleBtn" type="button">⏳ Zeitplaner</button>
-      <button class="btn btn-ghost" id="dupCheckBtn" type="button">🔍 Duplikate prüfen</button>
-      <button class="btn btn-ghost" id="steamRecentBtn" type="button"><img class="steam-badge" src="steam-icon.png" alt="" style="margin-left:0; margin-right:6px;">Zuletzt gespielt</button>
       <div class="view-switch">
-        <button class="view-btn active" id="viewListBtn" type="button" title="Listenansicht">☰</button>
+        <button class="view-btn active" id="viewListBtn" type="button" title="Listenansicht">📋</button>
         <button class="view-btn" id="viewGridBtn" type="button" title="Cover-Ansicht">▦</button>
       </div>
     </div>
@@ -938,6 +995,24 @@ document.getElementById('logoutBtn').addEventListener('click', () => {
   clearSession();
   showLogin();
 });
+
+/* ---------- Seitenmenü (Hamburger) ---------- */
+function openDrawer(){
+  document.getElementById('sideDrawer').classList.add('open');
+  document.getElementById('sideDrawerOverlay').style.display = 'block';
+}
+function closeDrawer(){
+  document.getElementById('sideDrawer').classList.remove('open');
+  document.getElementById('sideDrawerOverlay').style.display = 'none';
+}
+document.getElementById('hamburgerBtn').addEventListener('click', openDrawer);
+document.getElementById('drawerCloseBtn').addEventListener('click', closeDrawer);
+document.getElementById('sideDrawerOverlay').addEventListener('click', closeDrawer);
+// Menü automatisch schließen, wenn ein Eintrag im Menü angeklickt wird
+document.querySelectorAll('.side-drawer .drawer-item').forEach(el => {
+  el.addEventListener('click', () => setTimeout(closeDrawer, 150));
+});
+document.getElementById('themeSelect').addEventListener('change', () => setTimeout(closeDrawer, 150));
 
 /* ---------- Supabase-backed persistent storage (nur für eingeloggte Nutzer) ---------- */
 async function supaRequest(path, options){
@@ -1841,6 +1916,11 @@ document.getElementById('dupCheckBtn').addEventListener('click', () => {
   const show = panel.style.display === 'none';
   if (!show){ panel.style.display = 'none'; return; }
   panel.style.display = 'block';
+  runDuplicateCheck();
+});
+
+function runDuplicateCheck(){
+  const panel = document.getElementById('dupCheckPanel');
   panel.innerHTML = '<p class="muted">Prüfe auf ähnliche Titel...</p>';
 
   setTimeout(() => {
@@ -1869,20 +1949,87 @@ document.getElementById('dupCheckBtn').addEventListener('click', () => {
     }
     panel.innerHTML = `<h3 style="margin:0 0 12px; font-family:'Rajdhani',sans-serif; color:#fff;">🔍 ${pairs.length} mögliche Duplikate gefunden</h3>` +
       pairs.slice(0, 60).map((p,i) => `
-        <div class="watch-row">
-          <span class="watch-title">${escapeHtml(p.a.title)} <span class="muted">↔</span> ${escapeHtml(p.b.title)}</span>
+        <div class="watch-row" data-pair-a="${p.a.id}" data-pair-b="${p.b.id}">
+          <span class="watch-title">${escapeHtml(p.a.title)} <span class="muted">(${escapeHtml(p.a.status||'–')}${p.a.platform?', '+escapeHtml(p.a.platform):''})</span> <span class="muted">↔</span> ${escapeHtml(p.b.title)} <span class="muted">(${escapeHtml(p.b.status||'–')}${p.b.platform?', '+escapeHtml(p.b.platform):''})</span></span>
           <span class="muted" style="font-size:11px;">${Math.round(p.similarity*100)}% ähnlich</span>
           <div class="watch-links">
             <button class="copy-title-btn" type="button" data-id="${p.a.id}">Bearbeiten: 1</button>
             <button class="copy-title-btn" type="button" data-id="${p.b.id}">Bearbeiten: 2</button>
+            <button class="copy-title-btn merge-btn" type="button" data-a="${p.a.id}" data-b="${p.b.id}">🔗 Verschmelzen</button>
           </div>
         </div>
       `).join('');
-    panel.querySelectorAll('.copy-title-btn').forEach(btn => {
+    panel.querySelectorAll('.copy-title-btn:not(.merge-btn)').forEach(btn => {
       btn.addEventListener('click', () => openEdit(btn.dataset.id));
     });
+    panel.querySelectorAll('.merge-btn').forEach(btn => {
+      btn.addEventListener('click', () => handleMergeClick(btn.dataset.a, btn.dataset.b));
+    });
   }, 30);
-});
+}
+
+/* ---------- Intelligentes Verschmelzen doppelter Spiele (verschiedene Spielläufe) ---------- */
+const STATUS_PROGRESS_RANK = {
+  'Durchgezockt': 5, 'Am zocken': 4, 'Noch zocken': 3, 'Pausiert': 2,
+  'Kommt noch': 1, 'Abgebrochen': 1, 'Langweilig': 1,
+};
+
+function mergeGamePair(a, b){
+  const aDone = a.status === 'Durchgezockt', bDone = b.status === 'Durchgezockt';
+  let primary, other;
+  if (aDone && !bDone){ primary = b; other = a; }
+  else if (bDone && !aDone){ primary = a; other = b; }
+  else {
+    const rankA = STATUS_PROGRESS_RANK[a.status] || 0, rankB = STATUS_PROGRESS_RANK[b.status] || 0;
+    if (rankA >= rankB){ primary = a; other = b; } else { primary = b; other = a; }
+  }
+
+  const merged = { ...primary };
+  if (a.platform && b.platform && a.platform !== b.platform){
+    merged.platform = [a.platform, b.platform].filter(Boolean).join(' + ');
+  }
+  const durA = parseFloat(a.duration)||0, durB = parseFloat(b.duration)||0;
+  if (durA || durB) merged.duration = (durA + durB) || '';
+  const priceA = parseFloat(a.price)||0, priceB = parseFloat(b.price)||0;
+  if (priceA || priceB) merged.price = (priceA + priceB).toFixed(2);
+  merged.cover = primary.cover || other.cover || '';
+  merged.genre = primary.genre || other.genre || '';
+  merged.releasedate = primary.releasedate || other.releasedate || '';
+  merged.addedAt = primary.addedAt || other.addedAt || '';
+  merged.source = primary.source || other.source || '';
+  merged.pricewatch = primary.pricewatch || other.pricewatch;
+  if (!merged.finished && other.finished) merged.finished = other.finished;
+  if (!merged.verdict && other.verdict) merged.verdict = other.verdict;
+
+  const histParts = [];
+  if (other.status === 'Durchgezockt' || other.finished){
+    histParts.push(`Früherer Durchlauf${other.platform ? ' (' + other.platform + ')' : ''}: durchgezockt${other.finished ? ' am ' + other.finished : ''}${other.verdict ? ', Fazit ' + other.verdict : ''}.`);
+  } else {
+    histParts.push(`Weiterer Durchlauf${other.platform ? ' (' + other.platform + ')' : ''}: Status war "${other.status || '–'}".`);
+  }
+  merged.notes = [primary.notes, other.notes, histParts.join(' ')].filter(Boolean).join(' | ');
+
+  return merged;
+}
+
+async function handleMergeClick(idA, idB){
+  const a = games.find(g => g.id === idA), b = games.find(g => g.id === idB);
+  if (!a || !b) return;
+  const merged = mergeGamePair(a, b);
+  const preview = `"${escapeHtml(a.title)}" und "${escapeHtml(b.title)}" zusammenführen?<br><br>
+    Ergebnis: Status <b>${escapeHtml(merged.status)}</b>, Plattform <b>${escapeHtml(merged.platform || '–')}</b>${merged.duration ? ', ' + merged.duration + ' Std. gesamt' : ''}${merged.finished ? ', durchgezockt am ' + merged.finished : ''}.<br>
+    Die Historie des anderen Durchlaufs wird in den Bemerkungen festgehalten. Ein Eintrag wird danach gelöscht.`;
+  const ok = await showConfirm(preview);
+  if (!ok) return;
+
+  const idxA = games.findIndex(g => g.id === idA);
+  games[idxA] = { ...merged, id: idA };
+  games = games.filter(g => g.id !== idB);
+  render();
+  await saveGames();
+  showToast('🔗 Spiele erfolgreich zusammengeführt.', 'success');
+  runDuplicateCheck();
+}
 
 document.getElementById('steamRecentBtn').addEventListener('click', async () => {
   const panel = document.getElementById('steamRecentPanel');
