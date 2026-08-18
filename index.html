@@ -292,6 +292,52 @@
   .watch-links a:hover{background:var(--royal-dim);}
 
   /* Login screen */
+  /* Toast-Benachrichtigungen (statt Browser-alert) */
+  .toast-container{
+    position:fixed; bottom:24px; right:24px; z-index:200;
+    display:flex; flex-direction:column; gap:10px; max-width:360px;
+  }
+  .toast{
+    background:var(--bg-elev); border:1px solid var(--line); border-left:3px solid var(--royal-hi);
+    border-radius:10px; padding:14px 16px; box-shadow:0 8px 24px rgba(0,0,0,0.4);
+    font-size:13.5px; color:var(--text); animation:toastIn .25s ease;
+  }
+  .toast.success{border-left-color:var(--green);}
+  .toast.error{border-left-color:var(--red);}
+  .toast.warn{border-left-color:var(--gold);}
+  .toast b{color:#fff;}
+  @keyframes toastIn{from{opacity:0; transform:translateX(20px);} to{opacity:1; transform:translateX(0);}}
+
+  /* Bestätigungs-Dialog (statt Browser-confirm) */
+  .confirm-overlay{
+    position:fixed; inset:0; background:rgba(6,8,14,0.7); z-index:210;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .confirm-box{
+    background:var(--bg-elev); border:1px solid var(--line); border-radius:14px;
+    padding:22px 24px; max-width:400px; width:100%;
+  }
+  .confirm-box p{margin:0 0 18px; font-size:14px; color:var(--text); line-height:1.5;}
+  .confirm-actions{display:flex; gap:10px; justify-content:flex-end;}
+
+  .dusty-flag{color:var(--gold); font-size:11px; margin-left:6px;}
+  .month-recap{
+    background:var(--bg-elev); border:1px solid var(--line); border-radius:10px;
+    padding:12px 16px; margin-bottom:16px; font-size:13px; color:var(--text-muted);
+  }
+  .month-recap b{color:#fff;}
+  .liste-countdown{
+    background:var(--bg-elev); border:1px solid var(--royal-dim); border-radius:10px;
+    padding:10px 16px; margin-bottom:16px; font-size:13px; color:var(--text-muted);
+    display:flex; align-items:center; gap:8px;
+  }
+  .liste-countdown b{color:var(--royal-hi);}
+  .backup-reminder{
+    background:#e8a33d15; border:1px solid #e8a33d40; border-radius:10px;
+    padding:10px 16px; margin-bottom:16px; font-size:13px; color:var(--gold);
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+  }
+
   .login-screen{
     position:fixed; inset:0; background: radial-gradient(1200px 600px at 80% -10%, #131a2c 0%, var(--bg) 55%);
     display:flex; align-items:center; justify-content:center; z-index:100; padding:20px;
@@ -391,6 +437,13 @@
 
   /* Native CSS bar chart (Chart.js-Ersatz) */
   .css-bar-chart{display:flex; align-items:flex-end; gap:10px; height:160px; padding-top:10px;}
+
+  /* Horizontal bar chart (Genres) */
+  .hbar-row{display:flex; align-items:center; gap:10px; margin-bottom:9px;}
+  .hbar-label{width:110px; flex-shrink:0; font-size:12.5px; color:var(--text-muted); text-align:right;}
+  .hbar-track{flex:1; background:#1b2233; border-radius:5px; height:14px; overflow:hidden;}
+  .hbar-fill{height:100%; background:linear-gradient(90deg, var(--royal), var(--royal-hi)); border-radius:5px;}
+  .hbar-val{width:26px; font-size:12px; color:var(--text-muted); font-family:'JetBrains Mono',monospace;}
   .cbar-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:6px;}
   .cbar{width:100%; max-width:44px; border-radius:5px 5px 0 0; background:var(--royal); min-height:2px; transition:height .3s ease;}
   .cbar-val{font-size:10.5px; color:var(--text-muted); font-family:'JetBrains Mono',monospace;}
@@ -398,6 +451,8 @@
 </style>
 </head>
 <body>
+<div id="toastContainer" class="toast-container"></div>
+
 <div id="loginScreen" class="login-screen">
   <div class="login-box">
     <h1 class="login-title">Zocker<span>liste</span></h1>
@@ -422,12 +477,13 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-16-steamicon-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-17-bigupdate-v1</p>
+      <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
       <button class="add-btn" id="openAdd">+ Spiel hinzufügen</button>
       <button class="btn btn-ghost" id="randomPickBtn" type="button">🎲 Was soll ich zocken?</button>
-      <button class="btn btn-ghost" id="steamImportBtn" type="button">🎮 Steam importieren</button>
+      <button class="btn btn-ghost" id="steamImportBtn" type="button"><img class="steam-badge" src="steam-icon.png" alt="" style="margin-left:0; margin-right:6px;">Steam importieren</button>
       <button class="btn btn-ghost" id="exportBtn" type="button">⬇ JSON</button>
       <button class="btn btn-ghost" id="csvExportBtn" type="button">⬇ CSV</button>
       <button class="btn btn-ghost" id="importBtn" type="button">⬆ Import</button>
@@ -452,18 +508,25 @@
   </nav>
 
   <div id="tab-liste" class="tab-panel">
+    <div id="backupReminder" class="backup-reminder" style="display:none;"></div>
+    <div id="listeCountdown" class="liste-countdown" style="display:none;"></div>
+    <div id="monthRecap" class="month-recap" style="display:none;"></div>
     <div class="filters">
       <input type="text" id="searchInput" placeholder="Titel oder Bemerkung suchen...">
       <select id="statusFilter"><option value="">Alle Status</option></select>
       <select id="prioFilter"><option value="">Alle Prioritäten</option></select>
       <button class="btn btn-ghost" id="syncDbBtn" type="button" title="Cover, Releasedatum und Sprache aus der Datenbank nachziehen">🔄 Mit Datenbank abgleichen</button>
       <button class="btn btn-ghost" id="plannerToggleBtn" type="button">⏳ Zeitplaner</button>
+      <button class="btn btn-ghost" id="dupCheckBtn" type="button">🔍 Duplikate prüfen</button>
+      <button class="btn btn-ghost" id="steamRecentBtn" type="button"><img class="steam-badge" src="steam-icon.png" alt="" style="margin-left:0; margin-right:6px;">Zuletzt gespielt</button>
       <div class="view-switch">
         <button class="view-btn active" id="viewListBtn" type="button" title="Listenansicht">☰</button>
         <button class="view-btn" id="viewGridBtn" type="button" title="Cover-Ansicht">▦</button>
       </div>
     </div>
     <div id="syncProgress" class="tab-hint" style="display:none;"></div>
+    <div id="dupCheckPanel" class="table-card" style="display:none; padding:18px 20px; margin-bottom:20px;"></div>
+    <div id="steamRecentPanel" class="table-card" style="display:none; padding:18px 20px; margin-bottom:20px;"></div>
 
     <div id="plannerPanel" class="table-card" style="display:none; padding:18px 20px; margin-bottom:20px;">
       <h3 style="margin:0 0 4px; font-family:'Rajdhani',sans-serif; color:#fff;">⏳ Was schaffe ich noch?</h3>
@@ -598,6 +661,11 @@
         <h3>Längste Spiele</h3>
         <div id="topLongest" class="rank-list"></div>
       </div>
+    </div>
+    <div class="chart-card">
+      <h3>💶 Günstigstes Vergnügen (€ pro Spielstunde)</h3>
+      <p class="tab-hint" style="margin-top:-6px;">Nur Spiele mit eingetragenem Preis und eingetragener Dauer.</p>
+      <div id="valueForMoney" class="rank-list"></div>
     </div>
     <div class="chart-card">
       <h3>🎮 Genres</h3>
@@ -825,6 +893,19 @@ async function showApp(){
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('mainApp').style.display = 'block';
   await loadGames();
+  updateAppBadge();
+}
+
+// App-Icon-Badge: Anzahl der Releases in den nächsten 7 Tagen (nur falls der Browser das unterstützt)
+function updateAppBadge(){
+  if (!('setAppBadge' in navigator)) return;
+  const today = new Date().toISOString().slice(0,10);
+  const in7Days = new Date(Date.now() + 7*86400000).toISOString().slice(0,10);
+  const count = games.filter(g => g.releasedate && g.releasedate > today && g.releasedate <= in7Days).length;
+  try{
+    if (count > 0) navigator.setAppBadge(count).catch(()=>{});
+    else navigator.clearAppBadge().catch(()=>{});
+  }catch(e){ /* Badging API evtl. nicht verfügbar - kein Problem, nur kosmetisch */ }
 }
 
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -943,9 +1024,20 @@ async function loadGames(){
 async function saveGames(){
   try{
     await window.storage.set('games', JSON.stringify(games), false);
+    flashSaveIndicator();
   }catch(e){
     console.error('Speichern fehlgeschlagen', e);
+    showToast('⚠️ Speichern fehlgeschlagen - Änderung evtl. nicht gesichert.', 'error');
   }
+}
+
+let saveIndicatorTimeout = null;
+function flashSaveIndicator(){
+  const el = document.getElementById('saveIndicator');
+  if (!el) return;
+  el.style.opacity = '1';
+  clearTimeout(saveIndicatorTimeout);
+  saveIndicatorTimeout = setTimeout(() => { el.style.opacity = '0'; }, 1400);
 }
 
 function uid(){ return 'g_' + Date.now() + '_' + Math.random().toString(36).slice(2,8); }
@@ -962,10 +1054,58 @@ function render(){
   statusFilter.innerHTML = '<option value="">Alle Status</option>' + statuses.map(s=>`<option ${s===curStatus?'selected':''}>${s}</option>`).join('');
   prioFilter.innerHTML = '<option value="">Alle Prioritäten</option>' + prios.map(p=>`<option ${p===curPrio?'selected':''}>${p}</option>`).join('');
 
+  renderMonthRecap();
+  renderListeCountdown();
+  renderBackupReminder();
   renderTable();
+  updateAppBadge();
+}
+
+function renderMonthRecap(){
+  const el = document.getElementById('monthRecap');
+  const now = new Date();
+  const ym = now.toISOString().slice(0,7);
+  const monthGames = games.filter(g => g.finished && g.finished.slice(0,7) === ym);
+  if (monthGames.length === 0){ el.style.display = 'none'; return; }
+  const hours = monthGames.reduce((s,g)=>s+(parseFloat(g.duration)||0),0);
+  el.style.display = 'block';
+  el.innerHTML = `📅 Im ${MONTH_NAMES_DE[now.getMonth()]}: <b>${monthGames.length}</b> Spiel${monthGames.length===1?'':'e'} durchgezockt${hours>0 ? `, <b>${hours.toFixed(0)} Std.</b>` : ''}`;
+}
+
+function renderListeCountdown(){
+  const el = document.getElementById('listeCountdown');
+  const today = new Date().toISOString().slice(0,10);
+  const next = games
+    .filter(g => g.releasedate && g.releasedate > today)
+    .sort((a,b) => a.releasedate.localeCompare(b.releasedate))[0];
+  if (!next){ el.style.display = 'none'; return; }
+  const days = Math.ceil((new Date(next.releasedate) - new Date(today)) / 86400000);
+  el.style.display = 'flex';
+  el.innerHTML = `⏳ Nächstes Release: <b>${escapeHtml(next.title)}</b> - noch ${days === 0 ? 'heute' : days === 1 ? '1 Tag' : days + ' Tage'}`;
+}
+
+function renderBackupReminder(){
+  const el = document.getElementById('backupReminder');
+  let lastExport = null;
+  try{ lastExport = localStorage.getItem('zl_last_export'); }catch(e){}
+  const daysSince = lastExport ? Math.floor((Date.now() - new Date(lastExport).getTime()) / 86400000) : Infinity;
+  if (daysSince < 7){ el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = `
+    <span>💾 ${lastExport ? `Letztes Backup vor ${daysSince} Tagen` : 'Noch nie ein Backup gemacht'} - Zeit für ein JSON-Backup?</span>
+    <button class="btn btn-ghost" id="backupNowBtn" type="button">Jetzt exportieren</button>
+  `;
+  document.getElementById('backupNowBtn').addEventListener('click', () => document.getElementById('exportBtn').click());
 }
 
 let currentSort = { col: 'title', dir: 'asc' };
+
+// "Verstaubt": lange im Backlog ohne Fortschritt (nur für Spiele mit bekanntem Hinzufüge-Datum bestimmbar)
+function isDusty(g){
+  if (g.status !== 'Noch zocken' || !g.addedAt) return false;
+  const days = (Date.now() - new Date(g.addedAt).getTime()) / 86400000;
+  return days > 365;
+}
 
 function renderTable(){
   const search = document.getElementById('searchInput').value.toLowerCase();
@@ -1016,7 +1156,7 @@ function renderTable(){
     const color = STATUS_COLORS[g.status] || '#565f78';
     return `<tr data-id="${g.id}">
       <td class="row-cover-cell">${g.cover ? `<img class="row-cover" src="${g.cover}" alt="">` : ''}</td>
-      <td class="title-cell">${escapeHtml(g.title)}${(g.platform && !(g.source === 'steam' && g.platform === 'PC')) ? `<span class="platform-tag">${escapeHtml(g.platform)}</span>` : ''}${g.source === 'steam' ? `<img class="steam-badge" src="steam-icon.png" title="Von Steam importiert" alt="Steam">` : ''}<a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></td>
+      <td class="title-cell">${escapeHtml(g.title)}${(g.platform && !(g.source === 'steam' && g.platform === 'PC')) ? `<span class="platform-tag">${escapeHtml(g.platform)}</span>` : ''}${g.source === 'steam' ? `<img class="steam-badge" src="steam-icon.png" title="Von Steam importiert" alt="Steam">` : ''}${isDusty(g) ? `<span class="dusty-flag" title="Seit über einem Jahr im Backlog ohne Fortschritt">🕸️</span>` : ''}<a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></td>
       <td><span class="status-pill" style="background:${color}22; color:${color}; border:1px solid ${color}55;">${g.status||'–'}</span></td>
       <td class="prio-tag">${(g.status === 'Noch zocken' && g.priority) ? g.priority.replace(/^[0-9]+\\.\\s*/,'') : '<span class="muted">–</span>'}</td>
       <td>${g.price ? parseFloat(g.price).toFixed(2)+' €' : '<span class="muted">–</span>'}</td>
@@ -1040,7 +1180,7 @@ function renderTable(){
     return `<div class="mcard" data-id="${g.id}">
       <div class="mcard-top">
         ${g.cover ? `<img class="mcard-cover" src="${g.cover}" alt="">` : ''}
-        <span class="mcard-title" style="flex:1;">${escapeHtml(g.title)} <a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></span>
+        <span class="mcard-title" style="flex:1;">${escapeHtml(g.title)}${isDusty(g) ? ` <span class="dusty-flag" title="Seit über einem Jahr im Backlog">🕸️</span>` : ''} <a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></span>
         <span class="status-pill" style="background:${color}22; color:${color}; border:1px solid ${color}55; flex-shrink:0;">${g.status||'–'}</span>
       </div>
       <div class="mcard-meta">
@@ -1093,6 +1233,56 @@ function renderCoverGrid(list){
     link.addEventListener('click', (e) => e.stopPropagation());
   });
 }
+
+/* ---------- Moderne Benachrichtigungen (statt Browser-alert/confirm) ---------- */
+function showToast(message, type='info', duration=3500){
+  const container = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.innerHTML = message;
+  container.appendChild(el);
+  setTimeout(() => {
+    el.style.transition = 'opacity .25s ease';
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 250);
+  }, duration);
+}
+
+function showConfirm(message){
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    overlay.innerHTML = `
+      <div class="confirm-box">
+        <p>${message}</p>
+        <div class="confirm-actions">
+          <button class="btn btn-ghost" id="confirmNo">Abbrechen</button>
+          <button class="btn btn-primary" id="confirmYes">Bestätigen</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#confirmYes').addEventListener('click', () => { overlay.remove(); resolve(true); });
+    overlay.querySelector('#confirmNo').addEventListener('click', () => { overlay.remove(); resolve(false); });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay){ overlay.remove(); resolve(false); } });
+  });
+}
+
+/* ---------- Tastenkürzel ---------- */
+document.addEventListener('keydown', (e) => {
+  const inInput = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName);
+  if ((e.ctrlKey || e.metaKey) && e.key === 'n' && !inInput){
+    e.preventDefault();
+    if (document.getElementById('mainApp').style.display !== 'none') openAdd();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f'){
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput && document.getElementById('tab-liste').style.display !== 'none'){
+      e.preventDefault();
+      searchInput.focus();
+    }
+  }
+});
 
 function escapeHtml(str){
   const div = document.createElement('div');
@@ -1158,7 +1348,7 @@ document.getElementById('openAdd').addEventListener('click', openAdd);
 document.getElementById('cancelBtn').addEventListener('click', closeModal);
 document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') closeModal(); });
 
-document.getElementById('gameForm').addEventListener('submit', (e) => {
+document.getElementById('gameForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   try{
     const id = document.getElementById('gameId').value;
@@ -1185,28 +1375,32 @@ document.getElementById('gameForm').addEventListener('submit', (e) => {
       if (idx > -1) games[idx] = {...games[idx], ...data};
     } else {
       const dup = games.find(g => g.title.trim().toLowerCase() === data.title.toLowerCase());
-      if (dup && !confirm(`"${data.title}" ist schon in deiner Liste (Status: ${dup.status || '–'}). Trotzdem als neuer Eintrag hinzufügen?`)){
-        return;
+      if (dup){
+        const ok = await showConfirm(`"${escapeHtml(data.title)}" ist schon in deiner Liste (Status: ${escapeHtml(dup.status || '–')}). Trotzdem als neuer Eintrag hinzufügen?`);
+        if (!ok) return;
       }
-      games.push({ id: uid(), ...data });
+      games.push({ id: uid(), addedAt: new Date().toISOString().slice(0,10), ...data });
     }
     closeModal();
     render();
     saveGames().catch(err => console.error('Hintergrund-Speichern fehlgeschlagen', err));
+    showToast(id ? '✓ Änderungen gespeichert.' : `✓ "${escapeHtml(data.title)}" hinzugefügt.`, 'success');
   }catch(err){
     console.error('Speichern-Fehler', err);
-    alert('Beim Speichern ist ein Fehler aufgetreten: ' + err.message);
+    showToast('❌ Beim Speichern ist ein Fehler aufgetreten: ' + err.message, 'error');
   }
 });
 
-document.getElementById('deleteBtn').addEventListener('click', () => {
+document.getElementById('deleteBtn').addEventListener('click', async () => {
   const id = document.getElementById('gameId').value;
   const g = games.find(x => x.id === id);
-  if (!confirm(`"${g ? g.title : 'Dieses Spiel'}" wirklich unwiderruflich löschen?`)) return;
+  const ok = await showConfirm(`"${escapeHtml(g ? g.title : 'Dieses Spiel')}" wirklich unwiderruflich löschen?`);
+  if (!ok) return;
   games = games.filter(g => g.id !== id);
   closeModal();
   render();
   saveGames().catch(err => console.error('Hintergrund-Speichern fehlgeschlagen', err));
+  showToast('🗑️ Spiel gelöscht.', 'warn');
 });
 
 ['searchInput','statusFilter','prioFilter'].forEach(id => {
@@ -1253,6 +1447,9 @@ document.getElementById('exportBtn').addEventListener('click', () => {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+  try{ localStorage.setItem('zl_last_export', new Date().toISOString()); }catch(e){}
+  document.getElementById('backupReminder').style.display = 'none';
+  showToast('✓ Backup heruntergeladen.', 'success');
 });
 
 document.getElementById('importBtn').addEventListener('click', () => {
@@ -1350,7 +1547,7 @@ document.getElementById('dbSearchBtn').addEventListener('click', async () => {
   }
   resultsEl.innerHTML = '<p class="muted" style="font-size:12px;">Suche...</p>';
   try{
-    const res = await fetch(buildSourceUrl('search', { q }));
+    const res = await proxyFetch(buildSourceUrl('search', { q }));
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     const results = (data.results || []).slice(0, 6);
@@ -1437,22 +1634,32 @@ document.getElementById('randomPickBtn').addEventListener('click', () => {
 
 /* ---------- Steam-Bibliothek importieren ---------- */
 document.getElementById('steamImportBtn').addEventListener('click', async () => {
-  if (!confirm('Deine Steam-Bibliothek importieren? Bereits vorhandene Titel (gleicher Name) werden übersprungen.')) return;
+  const ok = await showConfirm('Deine Steam-Bibliothek importieren? Spiele, die schon in deiner Liste stehen, werden nicht doppelt angelegt, aber mit dem Steam-Symbol markiert.');
+  if (!ok) return;
   const btn = document.getElementById('steamImportBtn');
-  const orig = btn.textContent;
+  const origHtml = btn.innerHTML;
   btn.disabled = true;
-  btn.textContent = '⏳ Lade Steam-Bibliothek...';
+  btn.innerHTML = '⏳ Lade Steam-Bibliothek...';
   try{
-    const res = await fetch(`${IGDB_PROXY_URL}?action=steam`);
+    const res = await proxyFetch(`${IGDB_PROXY_URL}?action=steam`);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     const steamGames = data.results || [];
-    const existingTitles = new Set(games.map(g => g.title.toLowerCase()));
-    let added = 0, skipped = 0;
+    const byTitle = new Map(games.map(g => [g.title.toLowerCase(), g]));
+    let added = 0, marked = 0;
     steamGames.forEach(sg => {
-      if (existingTitles.has(sg.name.toLowerCase())){ skipped++; return; }
+      const existing = byTitle.get(sg.name.toLowerCase());
+      if (existing){
+        if (existing.source !== 'steam'){
+          existing.source = 'steam';
+          if (!existing.cover) existing.cover = sg.background_image;
+          marked++;
+        }
+        return;
+      }
       games.push({
         id: uid(),
+        addedAt: new Date().toISOString().slice(0,10),
         title: sg.name,
         status: 'Noch zocken',
         priority: '',
@@ -1470,17 +1677,17 @@ document.getElementById('steamImportBtn').addEventListener('click', async () => 
         platform: 'PC',
         source: 'steam',
       });
-      existingTitles.add(sg.name.toLowerCase());
+      byTitle.set(sg.name.toLowerCase(), games[games.length-1]);
       added++;
     });
     render();
     await saveGames();
-    alert(`✅ Steam-Import fertig: ${added} neue Spiele hinzugefügt, ${skipped} bereits vorhanden übersprungen.`);
+    showToast(`✅ Steam-Import fertig: <b>${added}</b> neue Spiele, <b>${marked}</b> markiert.`, 'success', 5000);
   }catch(err){
-    alert('Steam-Import fehlgeschlagen: ' + err.message);
+    showToast('❌ Steam-Import fehlgeschlagen: ' + err.message, 'error');
   }finally{
     btn.disabled = false;
-    btn.textContent = orig;
+    btn.innerHTML = origHtml;
   }
 });
 
@@ -1562,7 +1769,7 @@ async function syncAllWithDatabase(){
     const g = games[i];
     progressEl.textContent = `Gleiche ab (${dataSource === 'igdb' ? 'IGDB' : 'RAWG'})... ${i+1} / ${total} - zuletzt: ${g.title}`;
     try{
-      const res = await fetch(buildSourceUrl('search', { q: g.title }));
+      const res = await proxyFetch(buildSourceUrl('search', { q: g.title }));
       if (res.ok){
         const data = await res.json();
         const results = data.results || [];
@@ -1591,8 +1798,9 @@ async function syncAllWithDatabase(){
   setTimeout(() => { progressEl.style.display = 'none'; }, 6000);
 }
 
-document.getElementById('syncDbBtn').addEventListener('click', () => {
-  if (!confirm(`Alle ${games.length} Spiele gegen ${dataSource === 'igdb' ? 'IGDB' : 'RAWG'} abgleichen? Nur Cover und Releasedatum werden aktualisiert, Status/Priorität/Fazit etc. bleiben unverändert. Das kann je nach Anzahl einige Minuten dauern.`)) return;
+document.getElementById('syncDbBtn').addEventListener('click', async () => {
+  const ok = await showConfirm(`Alle ${games.length} Spiele gegen ${dataSource === 'igdb' ? 'IGDB' : 'RAWG'} abgleichen? Nur Cover und Releasedatum werden aktualisiert, Status/Priorität/Fazit etc. bleiben unverändert. Das kann je nach Anzahl einige Minuten dauern.`);
+  if (!ok) return;
   syncAllWithDatabase();
 });
 
@@ -1606,6 +1814,107 @@ document.getElementById('plannerToggleBtn').addEventListener('click', () => {
       .filter(g => g.releasedate && g.releasedate > new Date().toISOString().slice(0,10))
       .sort((a,b) => a.releasedate.localeCompare(b.releasedate))[0];
     if (nextRelease) document.getElementById('plannerDate').value = nextRelease.releasedate;
+  }
+});
+
+/* ---------- Duplikat-Check ---------- */
+function levenshtein(a, b){
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = Array(n+1).fill(0).map((_,i)=>i);
+  for (let i=1; i<=m; i++){
+    const cur = [i];
+    for (let j=1; j<=n; j++){
+      cur[j] = a[i-1] === b[j-1] ? prev[j-1] : 1 + Math.min(prev[j-1], prev[j], cur[j-1]);
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+function normalizeTitle(t){
+  return t.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+document.getElementById('dupCheckBtn').addEventListener('click', () => {
+  const panel = document.getElementById('dupCheckPanel');
+  const show = panel.style.display === 'none';
+  if (!show){ panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  panel.innerHTML = '<p class="muted">Prüfe auf ähnliche Titel...</p>';
+
+  setTimeout(() => {
+    const normed = games.map(g => ({ g, norm: normalizeTitle(g.title) }));
+    const pairs = [];
+    for (let i=0; i<normed.length; i++){
+      for (let j=i+1; j<normed.length; j++){
+        const a = normed[i], b = normed[j];
+        if (a.norm === b.norm){
+          pairs.push({ a: a.g, b: b.g, similarity: 1 });
+          continue;
+        }
+        const lenDiff = Math.abs(a.norm.length - b.norm.length);
+        const maxLen = Math.max(a.norm.length, b.norm.length);
+        if (maxLen === 0 || lenDiff / maxLen > 0.4) continue;
+        const dist = levenshtein(a.norm, b.norm);
+        const sim = 1 - dist / maxLen;
+        if (sim >= 0.82) pairs.push({ a: a.g, b: b.g, similarity: sim });
+      }
+    }
+    pairs.sort((x,y) => y.similarity - x.similarity);
+
+    if (pairs.length === 0){
+      panel.innerHTML = '<p class="muted">✓ Keine ähnlichen/doppelten Titel gefunden.</p>';
+      return;
+    }
+    panel.innerHTML = `<h3 style="margin:0 0 12px; font-family:'Rajdhani',sans-serif; color:#fff;">🔍 ${pairs.length} mögliche Duplikate gefunden</h3>` +
+      pairs.slice(0, 60).map((p,i) => `
+        <div class="watch-row">
+          <span class="watch-title">${escapeHtml(p.a.title)} <span class="muted">↔</span> ${escapeHtml(p.b.title)}</span>
+          <span class="muted" style="font-size:11px;">${Math.round(p.similarity*100)}% ähnlich</span>
+          <div class="watch-links">
+            <button class="copy-title-btn" type="button" data-id="${p.a.id}">Bearbeiten: 1</button>
+            <button class="copy-title-btn" type="button" data-id="${p.b.id}">Bearbeiten: 2</button>
+          </div>
+        </div>
+      `).join('');
+    panel.querySelectorAll('.copy-title-btn').forEach(btn => {
+      btn.addEventListener('click', () => openEdit(btn.dataset.id));
+    });
+  }, 30);
+});
+
+document.getElementById('steamRecentBtn').addEventListener('click', async () => {
+  const panel = document.getElementById('steamRecentPanel');
+  const show = panel.style.display === 'none';
+  if (!show){ panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  panel.innerHTML = '<p class="muted">Lade zuletzt gespielte Steam-Spiele...</p>';
+  try{
+    const res = await proxyFetch(`${IGDB_PROXY_URL}?action=steamrecent`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const recent = data.results || [];
+    if (recent.length === 0){
+      panel.innerHTML = '<p class="muted">In den letzten 2 Wochen nichts auf Steam gespielt.</p>';
+      return;
+    }
+    panel.innerHTML = `<h3 style="margin:0 0 12px; font-family:'Rajdhani',sans-serif; color:#fff;">🎮 Zuletzt gespielt (letzte 2 Wochen)</h3>` +
+      recent.map(r => {
+        const existing = games.find(g => g.title.toLowerCase() === r.name.toLowerCase());
+        const needsUpdate = existing && existing.status !== 'Am zocken' && existing.status !== 'Durchgezockt';
+        return `<div class="watch-row">
+          <span class="watch-title">${escapeHtml(r.name)}</span>
+          <span class="muted" style="font-size:11px;">${r.playtime_2weeks_hours} Std. (letzte 2 Wochen)</span>
+          ${needsUpdate ? `<button class="copy-title-btn" type="button" data-id="${existing.id}">Status aktualisieren?</button>` : ''}
+          ${!existing ? '<span class="muted" style="font-size:11px;">nicht in deiner Liste</span>' : ''}
+        </div>`;
+      }).join('');
+    panel.querySelectorAll('.copy-title-btn').forEach(btn => {
+      btn.addEventListener('click', () => openEdit(btn.dataset.id));
+    });
+  }catch(err){
+    panel.innerHTML = `<p style="color:var(--red);">Fehler: ${err.message}</p>`;
   }
 });
 
@@ -1699,6 +2008,14 @@ function renderKalender(){
 let rawgKey = null;
 const DEFAULT_RAWG_KEY = 'e58aa9b7b165409da17d9ccfae178d9c'; // aus Marvins vorherigem Streamlit-Projekt
 const IGDB_PROXY_URL = 'https://zockerliste-igdb-proxyc.siso-gaming.workers.dev/';
+
+// Schickt bei Anfragen an unseren Worker automatisch das Login-Token mit (Worker verlangt jetzt eine gültige Anmeldung)
+function proxyFetch(url){
+  if (url.startsWith(IGDB_PROXY_URL)){
+    return fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  }
+  return fetch(url);
+}
 let dataSource = localStorage.getItem('zl_datasource') || 'rawg';
 
 async function initDatenbankTab(){
@@ -1859,7 +2176,7 @@ async function rawgFetch(url){
   errorEl.textContent = '';
   document.getElementById('dbGrid').innerHTML = '<p class="muted">Lade...</p>';
   try{
-    const res = await fetch(url);
+    const res = await proxyFetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     filterAndRenderResults(data.results || []);
@@ -1876,7 +2193,7 @@ async function fetchDatesMerged(start, end){
   document.getElementById('dbGrid').innerHTML = '<p class="muted">Lade...</p>';
   try{
     if (dataSource === 'igdb'){
-      const res = await fetch(buildSourceUrl('dates', { start, end }));
+      const res = await proxyFetch(buildSourceUrl('dates', { start, end }));
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       filterAndRenderResults(data.results || []);
@@ -1934,10 +2251,11 @@ function renderDbGrid(results){
 }
 
 // Fügt ein Datenbank-Ergebnis hinzu, oder entfernt es wieder, falls schon in der Liste (Herz-Toggle)
-function toggleGameFromDbResult(r, btn){
+async function toggleGameFromDbResult(r, btn){
   const idx = games.findIndex(g => g.title.toLowerCase() === r.name.toLowerCase());
   if (idx > -1){
-    if (!confirm(`"${r.name}" wieder aus deiner Liste entfernen?`)) return;
+    const ok = await showConfirm(`"${escapeHtml(r.name)}" wieder aus deiner Liste entfernen?`);
+    if (!ok) return;
     games.splice(idx, 1);
     btn.textContent = '❤ Zur Liste hinzufügen';
     btn.classList.remove('added');
@@ -1945,6 +2263,7 @@ function toggleGameFromDbResult(r, btn){
     const today = new Date().toISOString().slice(0,10);
     games.push({
       id: uid(),
+      addedAt: today,
       title: r.name,
       status: (r.released && r.released <= today) ? 'Noch zocken' : 'Kommt noch',
       priority: '',
@@ -2060,6 +2379,15 @@ function renderStats(){
     `<div class="rank-row"><span class="n">${escapeHtml(g.title)}</span><span class="v">${parseFloat(g.duration).toFixed(0)} Std.</span></div>`
   ).join('') || '<span class="muted">Keine Daten</span>';
 
+  const valueForMoney = games
+    .filter(g => parseFloat(g.price) > 0 && parseFloat(g.duration) > 0)
+    .map(g => ({ g, perHour: parseFloat(g.price) / parseFloat(g.duration) }))
+    .sort((a,b) => a.perHour - b.perHour)
+    .slice(0, 8);
+  document.getElementById('valueForMoney').innerHTML = valueForMoney.map(({g, perHour}) =>
+    `<div class="rank-row"><span class="n">${escapeHtml(g.title)}</span><span class="v">${perHour.toFixed(2)} €/Std.</span></div>`
+  ).join('') || '<span class="muted">Noch keine Spiele mit Preis + Dauer erfasst.</span>';
+
   // Genre-Auswertung (nur Spiele mit Genre-Info, meist aus Datenbank-Import)
   const genreCounts = {};
   games.forEach(g => {
@@ -2070,9 +2398,19 @@ function renderStats(){
     }
   });
   const genreEntries = Object.entries(genreCounts).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  document.getElementById('genreBars').innerHTML = genreEntries.length
-    ? genreEntries.map(([genre,count]) => `<div class="rank-row"><span class="n">${escapeHtml(genre)}</span><span class="v">${count}</span></div>`).join('')
-    : '<span class="muted">Noch keine Genre-Daten - füge Spiele über die Datenbank-Suche hinzu, damit hier was erscheint.</span>';
+  const genreEl = document.getElementById('genreBars');
+  if (genreEntries.length === 0){
+    genreEl.innerHTML = '<span class="muted">Noch keine Genre-Daten - füge Spiele über die Datenbank-Suche hinzu, damit hier was erscheint.</span>';
+  } else {
+    const maxCount = genreEntries[0][1];
+    genreEl.innerHTML = genreEntries.map(([genre,count]) => `
+      <div class="hbar-row">
+        <span class="hbar-label">${escapeHtml(genre)}</span>
+        <div class="hbar-track"><div class="hbar-fill" style="width:${Math.max((count/maxCount)*100, 4)}%"></div></div>
+        <span class="hbar-val">${count}</span>
+      </div>
+    `).join('');
+  }
 
   // Jahresrückblick
   renderYearWrap();
@@ -2641,7 +2979,7 @@ async function renderRecommendations(hof){
   const topGenre = withGenre[0].genre.split(',')[0].trim();
   grid.innerHTML = '<p class="muted">Lade Empfehlungen für Genre "' + escapeHtml(topGenre) + '"...</p>';
   try{
-    const res = await fetch(buildSourceUrl('genre', { genre: topGenre }));
+    const res = await proxyFetch(buildSourceUrl('genre', { genre: topGenre }));
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     const owned = new Set(games.map(g => g.title.toLowerCase()));
