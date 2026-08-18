@@ -523,7 +523,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-18-dupauto-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-18-sequel-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
@@ -1928,6 +1928,24 @@ function normalizeTitle(t){
   return t.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+// Erkennt eine Zahl (arabisch oder römisch) am Ende eines normalisierten Titels,
+// um Reihen-Teile (Mass Effect 2 vs. 3) nicht als Duplikate zu werten
+const ROMAN_TRAILING = ['xiii','xii','xi','viii','vii','vi','iv','ix','x','v','iii','ii','i'];
+function splitTrailingNumber(norm){
+  const digitMatch = norm.match(/^(.*?)(\d+)$/);
+  if (digitMatch && digitMatch[1].length > 0) return { base: digitMatch[1], num: digitMatch[2] };
+  for (const roman of ROMAN_TRAILING){
+    if (norm.endsWith(roman) && norm.length > roman.length){
+      return { base: norm.slice(0, -roman.length), num: roman };
+    }
+  }
+  return { base: norm, num: null };
+}
+function isDifferentInstallment(normA, normB){
+  const a = splitTrailingNumber(normA), b = splitTrailingNumber(normB);
+  return a.base === b.base && a.num !== null && b.num !== null && a.num !== b.num;
+}
+
 document.getElementById('dupCheckBtn').addEventListener('click', () => {
   const panel = document.getElementById('dupCheckPanel');
   const show = panel.style.display === 'none';
@@ -1936,10 +1954,28 @@ document.getElementById('dupCheckBtn').addEventListener('click', () => {
   runDuplicateCheck();
 });
 
-function runDuplicateCheck(){
+let ignoredDupPairs = null; // Set von "idA|idB" (sortiert), geladen aus der Datenbank
+
+async function loadIgnoredDupPairs(){
+  if (ignoredDupPairs) return ignoredDupPairs;
+  try{
+    const res = await window.storage.get('ignored_dup_pairs', false);
+    ignoredDupPairs = new Set(res && res.value ? JSON.parse(res.value) : []);
+  }catch(e){
+    ignoredDupPairs = new Set();
+  }
+  return ignoredDupPairs;
+}
+function pairKey(idA, idB){ return [idA, idB].sort().join('|'); }
+async function saveIgnoredDupPairs(){
+  try{ await window.storage.set('ignored_dup_pairs', JSON.stringify([...ignoredDupPairs]), false); }catch(e){}
+}
+
+async function runDuplicateCheck(){
   const panel = document.getElementById('dupCheckPanel');
   panel.innerHTML = '<div class="panel-close-row"><span class="muted">Prüfe auf ähnliche Titel...</span><button class="panel-close-btn" id="dupPanelClose" type="button">✕</button></div>';
   document.getElementById('dupPanelClose').addEventListener('click', () => { panel.style.display = 'none'; });
+  await loadIgnoredDupPairs();
 
   setTimeout(() => {
     const normed = games.map(g => ({ g, norm: normalizeTitle(g.title) }));
@@ -1947,6 +1983,8 @@ function runDuplicateCheck(){
     for (let i=0; i<normed.length; i++){
       for (let j=i+1; j<normed.length; j++){
         const a = normed[i], b = normed[j];
+        if (ignoredDupPairs.has(pairKey(a.g.id, b.g.id))) continue;
+        if (isDifferentInstallment(a.norm, b.norm)) continue;
         if (a.norm === b.norm){
           pairs.push({ a: a.g, b: b.g, similarity: 1 });
           continue;
@@ -1977,6 +2015,7 @@ function runDuplicateCheck(){
             <button class="copy-title-btn" type="button" data-id="${p.a.id}">Bearbeiten: 1</button>
             <button class="copy-title-btn" type="button" data-id="${p.b.id}">Bearbeiten: 2</button>
             <button class="copy-title-btn merge-btn" type="button" data-a="${p.a.id}" data-b="${p.b.id}">🔗 Verschmelzen</button>
+            <button class="panel-close-btn ignore-pair-btn" type="button" data-a="${p.a.id}" data-b="${p.b.id}" title="Kein Duplikat - dauerhaft ignorieren">✕</button>
           </div>
         </div>
       `).join('');
@@ -1986,6 +2025,14 @@ function runDuplicateCheck(){
     });
     panel.querySelectorAll('.merge-btn').forEach(btn => {
       btn.addEventListener('click', () => handleMergeClick(btn.dataset.a, btn.dataset.b));
+    });
+    panel.querySelectorAll('.ignore-pair-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        ignoredDupPairs.add(pairKey(btn.dataset.a, btn.dataset.b));
+        await saveIgnoredDupPairs();
+        btn.closest('.watch-row').remove();
+        showToast('✕ Als kein Duplikat markiert - taucht nicht mehr auf.', 'success', 2500);
+      });
     });
   }, 30);
 }
