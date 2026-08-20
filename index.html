@@ -83,6 +83,13 @@
     font-family:'Inter',sans-serif; margin-bottom:2px;
   }
   .drawer-item:hover{background:var(--bg-elev2); color:#fff;}
+  .shortcut-legend{display:flex; flex-direction:column; gap:8px;}
+  .shortcut-row{display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--text-muted);}
+  .shortcut-row span{margin-left:6px;}
+  kbd{
+    background:var(--bg-elev2); border:1px solid var(--line); border-bottom-width:2px;
+    border-radius:5px; padding:2px 7px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#fff;
+  }
   .brand h1{
     font-family:'Rajdhani', sans-serif; font-weight:700; font-size:38px; letter-spacing:0.5px;
     margin:0; color:#fff; text-transform:uppercase;
@@ -224,6 +231,11 @@
     border:1px solid var(--royal-dim); padding:5px 11px; border-radius:6px; white-space:nowrap;
   }
   .cal-trailer:hover{background:var(--royal-dim);}
+  .cal-sales-btn{
+    background:none; border:1px solid var(--line); color:var(--gold);
+    padding:5px 9px; border-radius:6px; font-size:13px; cursor:pointer;
+  }
+  .cal-sales-btn:hover{border-color:var(--gold); background:#e8a33d15;}
 
   /* Statistik */
   .stat-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px;}
@@ -426,6 +438,10 @@
 
   /* View switcher */
   .view-switch{display:flex; gap:4px; margin-left:auto; align-self:center;}
+  .ctile-size-control{display:flex; align-items:center; gap:6px; margin-left:12px;}
+  .ctile-size-control input[type=range]{
+    width:100px; accent-color:var(--royal-hi); cursor:pointer;
+  }
   .view-btn{
     background:var(--bg-elev); border:1px solid var(--line); color:var(--text-muted);
     padding:8px 12px; border-radius:7px; cursor:pointer; font-size:15px;
@@ -439,7 +455,7 @@
   .mcard-top{display:flex; align-items:flex-start; gap:10px;}
 
   /* Cover grid (GOG-style) */
-  .cover-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(160px,1fr)); gap:14px;}
+  .cover-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(var(--ctile-size, 160px),1fr)); gap:14px;}
   .ctile{
     position:relative; border-radius:10px; overflow:hidden; aspect-ratio:3/4; cursor:pointer;
     background:var(--bg-elev); border:1px solid var(--line);
@@ -523,7 +539,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-18-sequel-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-18-shortcuts-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
@@ -564,6 +580,16 @@
         <option value="gold">🟡 Gold</option>
       </select>
     </div>
+    <div class="side-drawer-section">
+      <div class="side-drawer-label">Tastenkürzel</div>
+      <div class="shortcut-legend">
+        <div class="shortcut-row"><kbd>Strg</kbd>+<kbd>N</kbd><span>Spiel hinzufügen</span></div>
+        <div class="shortcut-row"><kbd>Strg</kbd>+<kbd>F</kbd><span>Suche fokussieren</span></div>
+        <div class="shortcut-row"><kbd>Esc</kbd><span>Fenster schließen</span></div>
+        <div class="shortcut-row"><kbd>Strg</kbd>+<kbd>S</kbd><span>Im Fenster speichern</span></div>
+        <div class="shortcut-row"><kbd>Strg</kbd>+<kbd>P</kbd><span>Im Fenster löschen</span></div>
+      </div>
+    </div>
   </nav>
 
   <nav class="tabs">
@@ -585,6 +611,11 @@
       <div class="view-switch">
         <button class="view-btn active" id="viewListBtn" type="button" title="Listenansicht">📋</button>
         <button class="view-btn" id="viewGridBtn" type="button" title="Cover-Ansicht">▦</button>
+      </div>
+      <div class="ctile-size-control" id="ctileSizeControl" style="display:none;">
+        <span style="font-size:14px;">🔍</span>
+        <input type="range" id="ctileSizeSlider" min="100" max="280" step="10" value="160">
+        <span style="font-size:17px;">🔍</span>
       </div>
     </div>
     <div id="syncProgress" class="tab-hint" style="display:none;"></div>
@@ -1363,6 +1394,26 @@ document.addEventListener('keydown', (e) => {
       searchInput.focus();
     }
   }
+
+  // Tastenkürzel innerhalb des Bearbeiten/Hinzufügen-Fensters
+  const overlay = document.getElementById('overlay');
+  if (overlay && overlay.style.display === 'flex'){
+    if (e.key === 'Escape'){
+      e.preventDefault();
+      closeModal();
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's'){
+      e.preventDefault();
+      document.getElementById('gameForm').requestSubmit();
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p'){
+      const deleteBtn = document.getElementById('deleteBtn');
+      if (deleteBtn && deleteBtn.style.display !== 'none'){
+        e.preventDefault();
+        deleteBtn.click();
+      }
+    }
+  }
 });
 
 function escapeHtml(str){
@@ -1596,6 +1647,7 @@ function applyView(){
   document.getElementById('coverGrid').style.display = isGrid ? 'grid' : 'none';
   document.getElementById('listViewDesktop').style.display = isGrid ? 'none' : '';
   document.getElementById('mobileCards').style.display = isGrid ? 'none' : '';
+  document.getElementById('ctileSizeControl').style.display = isGrid ? 'flex' : 'none';
 }
 document.getElementById('viewListBtn').addEventListener('click', () => {
   currentView = 'list'; localStorage.setItem('zl_view', currentView); applyView();
@@ -1604,6 +1656,16 @@ document.getElementById('viewGridBtn').addEventListener('click', () => {
   currentView = 'grid'; localStorage.setItem('zl_view', currentView); applyView();
 });
 applyView();
+
+/* ---------- Cover-Kachelgröße (Schieberegler wie im Windows-Explorer) ---------- */
+const savedCtileSize = localStorage.getItem('zl_ctile_size') || '160';
+document.getElementById('ctileSizeSlider').value = savedCtileSize;
+document.documentElement.style.setProperty('--ctile-size', savedCtileSize + 'px');
+document.getElementById('ctileSizeSlider').addEventListener('input', (e) => {
+  const val = e.target.value;
+  document.documentElement.style.setProperty('--ctile-size', val + 'px');
+  localStorage.setItem('zl_ctile_size', val);
+});
 
 /* ---------- Theme (Akzentfarbe) ---------- */
 const savedTheme = localStorage.getItem('zl_theme') || 'blue';
@@ -2219,9 +2281,24 @@ function renderKalender(){
       ${countdown}
       <span class="cal-badge ${upcoming ? 'upcoming' : 'released'}">${upcoming ? 'Kommt noch' : 'Erschienen'}</span>
       ${g.price ? `<span class="muted">${parseFloat(g.price).toFixed(2)} €</span>` : ''}
+      <button class="cal-sales-btn" type="button" data-id="${g.id}" title="Preis beobachten & zum Sales Tracker">💰</button>
       <a class="cal-trailer" href="${trailerUrl}" target="_blank" rel="noopener">▶ Trailer</a>
     </div>`;
   }).join('');
+
+  calList.querySelectorAll('.cal-sales-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const g = games.find(x => x.id === btn.dataset.id);
+      if (!g) return;
+      if (!g.pricewatch){
+        g.pricewatch = true;
+        render();
+        await saveGames();
+        showToast(`💰 "${escapeHtml(g.title)}" wird jetzt im Sales Tracker beobachtet.`, 'success');
+      }
+      document.querySelector('.tab-btn[data-tab="sales"]').click();
+    });
+  });
 }
 
 /* ---------- RAWG database browser ---------- */
