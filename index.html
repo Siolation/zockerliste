@@ -378,17 +378,27 @@
   .confirm-actions{display:flex; gap:10px; justify-content:flex-end;}
 
   .dusty-flag{color:var(--gold); font-size:11px; margin-left:6px;}
-  .month-recap{
-    background:var(--bg-elev); border:1px solid var(--line); border-radius:10px;
-    padding:12px 16px; margin-bottom:16px; font-size:13px; color:var(--text-muted);
+  .preorder-flag{font-size:11px; margin-left:6px;}
+  .verdict-pill{padding:2px 8px; border-radius:6px; font-size:12.5px; font-weight:600;}
+  .bulk-action-bar{
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    background:var(--royal-dim); border:1px solid var(--royal); border-radius:10px;
+    padding:10px 16px; margin-bottom:14px; font-size:13px; color:var(--text);
   }
-  .month-recap b{color:#fff;}
-  .liste-countdown{
-    background:var(--bg-elev); border:1px solid var(--royal-dim); border-radius:10px;
-    padding:10px 16px; margin-bottom:16px; font-size:13px; color:var(--text-muted);
-    display:flex; align-items:center; gap:8px;
+  .bulk-action-bar select{
+    background:var(--bg-elev); border:1px solid var(--line); color:var(--text);
+    padding:6px 10px; border-radius:6px; font-size:13px;
   }
-  .liste-countdown b{color:var(--royal-hi);}
+  .dashboard-card{
+    background:linear-gradient(135deg, var(--bg-elev), var(--bg-elev2));
+    border:1px solid var(--royal-dim); border-radius:12px;
+    padding:16px 20px; margin-bottom:16px;
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:16px;
+  }
+  .dash-item{display:flex; flex-direction:column; gap:2px;}
+  .dash-item .dash-label{font-size:11px; text-transform:uppercase; letter-spacing:0.4px; color:var(--text-faint); font-family:'Rajdhani',sans-serif; font-weight:600;}
+  .dash-item .dash-value{font-size:14px; color:#fff; font-weight:600;}
+  .dash-item .dash-value b{color:var(--royal-hi);}
   .backup-reminder{
     background:#e8a33d15; border:1px solid #e8a33d40; border-radius:10px;
     padding:10px 16px; margin-bottom:16px; font-size:13px; color:var(--gold);
@@ -481,6 +491,14 @@
     font-size:11px; color:var(--text-muted); pointer-events:none;
   }
   .ctile:hover .ctile-overlay{opacity:1; pointer-events:auto;}
+  .pulse-highlight{
+    animation: pulseGlow 0.8s ease-in-out 4;
+    box-shadow: 0 0 0 3px var(--royal-hi);
+  }
+  @keyframes pulseGlow{
+    0%, 100% { box-shadow: 0 0 0 3px var(--royal-hi), 0 0 20px 4px rgba(107,133,255,0.5); }
+    50% { box-shadow: 0 0 0 3px var(--royal-hi), 0 0 4px 1px rgba(107,133,255,0.2); }
+  }
   .ctile-overlay b{color:#fff;}
   .ctile-hltb{
     margin-top:6px; align-self:flex-start; color:var(--royal-hi); text-decoration:none;
@@ -539,7 +557,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-18-shortcuts-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-22-allfeatures-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
@@ -588,12 +606,14 @@
         <div class="shortcut-row"><kbd>Esc</kbd><span>Fenster schließen</span></div>
         <div class="shortcut-row"><kbd>Strg</kbd>+<kbd>S</kbd><span>Im Fenster speichern</span></div>
         <div class="shortcut-row"><kbd>Strg</kbd>+<kbd>P</kbd><span>Im Fenster löschen</span></div>
+        <div class="shortcut-row"><kbd>↑</kbd><kbd>↓</kbd><span>Voriges/nächstes Spiel</span></div>
       </div>
     </div>
   </nav>
 
   <nav class="tabs">
     <button class="tab-btn active" data-tab="liste">Liste</button>
+    <button class="tab-btn" data-tab="vr">🥽 VR</button>
     <button class="tab-btn" data-tab="kalender">Releasekalender</button>
     <button class="tab-btn" data-tab="datenbank">Datenbank</button>
     <button class="tab-btn" data-tab="sales">Sales Tracker</button>
@@ -602,8 +622,8 @@
 
   <div id="tab-liste" class="tab-panel">
     <div id="backupReminder" class="backup-reminder" style="display:none;"></div>
-    <div id="listeCountdown" class="liste-countdown" style="display:none;"></div>
-    <div id="monthRecap" class="month-recap" style="display:none;"></div>
+    <div id="offlineHint" class="backup-reminder" style="display:none; background:#e8556b15; border-color:#e8556b40; color:var(--red);"></div>
+    <div id="dashboardCard" class="dashboard-card" style="display:none;"></div>
     <div class="filters">
       <input type="text" id="searchInput" placeholder="Titel oder Bemerkung suchen...">
       <select id="statusFilter"><option value="">Alle Status</option></select>
@@ -639,10 +659,27 @@
       <div id="plannerResult"></div>
     </div>
 
+    <div id="bulkActionBar" class="bulk-action-bar" style="display:none;">
+      <span id="bulkSelectedCount">0 ausgewählt</span>
+      <select id="bulkStatusSelect">
+        <option value="">Status ändern zu...</option>
+        <option>Kommt noch</option>
+        <option>Noch zocken</option>
+        <option>Am zocken</option>
+        <option>Pausiert</option>
+        <option>Durchgezockt</option>
+        <option>Abgebrochen</option>
+        <option>Langweilig</option>
+      </select>
+      <button class="btn btn-ghost" id="bulkApplyStatusBtn" type="button">Anwenden</button>
+      <button class="btn btn-danger" id="bulkDeleteBtn" type="button">🗑️ Löschen</button>
+      <button class="btn btn-ghost" id="bulkClearBtn" type="button" style="margin-left:auto;">Auswahl aufheben</button>
+    </div>
     <div class="table-card table-desktop" id="listViewDesktop">
       <table>
         <thead>
           <tr>
+            <th><input type="checkbox" id="selectAllCheckbox"></th>
             <th></th>
             <th data-sort="title">Titel <span class="sort-arrow" data-col="title"></span></th>
             <th data-sort="status">Status <span class="sort-arrow" data-col="status"></span></th>
@@ -669,6 +706,36 @@
       <h3>Noch keine Spiele</h3>
       <p>Füg dein erstes Spiel hinzu, oder wir importieren als nächstes deine komplette Liste.</p>
     </div>
+  </div>
+
+  <div id="tab-vr" class="tab-panel" style="display:none;">
+    <p class="tab-hint">Deine VR-Spiele (Meta Quest, PlayStation VR2), getrennt von der normalen Liste.</p>
+    <div class="filters">
+      <input type="text" id="vrSearchInput" placeholder="Titel suchen...">
+      <select id="vrStatusFilter"><option value="">Alle Status</option></select>
+    </div>
+    <div class="table-card table-desktop">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Titel</th>
+            <th>Status</th>
+            <th>Plattform</th>
+            <th>Preis</th>
+            <th>Dauer</th>
+            <th>Fazit</th>
+            <th>Durchgezockt</th>
+          </tr>
+        </thead>
+        <tbody id="vrTableBody"></tbody>
+      </table>
+      <div class="empty-state" id="vrEmptyState" style="display:none;">
+        <h3>Noch keine VR-Spiele</h3>
+        <p>Wähl im Bearbeiten-Dialog eine VR-Plattform (Meta Quest, PlayStation VR2), dann taucht das Spiel hier auf.</p>
+      </div>
+    </div>
+    <div class="mobile-cards" id="vrMobileCards"></div>
   </div>
 
   <div id="tab-kalender" class="tab-panel" style="display:none;">
@@ -724,6 +791,11 @@
         <button class="btn btn-ghost" id="rawgSearchBtn" type="button">Suchen</button>
         <button class="btn btn-ghost" id="rawgChangeKey" type="button">API-Key ändern</button>
       </div>
+      <div class="month-chips" id="dbSearchHistory"></div>
+      <div class="filters" style="margin-top:8px;">
+        <input type="text" id="similarToInput" placeholder="Ähnlich wie... (Titel eingeben)">
+        <button class="btn btn-ghost" id="similarToBtn" type="button">🔎 Ähnliche finden</button>
+      </div>
       <p id="rawgError" class="tab-hint" style="color:var(--red);"></p>
       <div class="db-grid" id="dbGrid"></div>
     </div>
@@ -776,6 +848,7 @@
         <input type="file" id="customMusicInput" accept="audio/*" style="display:none;">
         <span id="customMusicName" class="tab-hint" style="margin:0;">Keine Datei gewählt - generierte Musik wird verwendet</span>
         <button class="btn btn-ghost" id="genVideoBtn" type="button" style="margin-left:auto;">🎬 Als Video generieren</button>
+        <button class="btn btn-ghost" id="genImageBtn" type="button">📸 Als Bild speichern</button>
       </div>
       <div id="yearWrapContent"></div>
       <div id="videoGenStatus" class="tab-hint" style="display:none;"></div>
@@ -833,6 +906,9 @@
             <option>Xbox Series X/S</option>
             <option>Xbox One</option>
             <option>Nintendo Switch</option>
+            <option>Meta Quest</option>
+            <option>PlayStation VR2</option>
+            <option>Sonstige VR</option>
             <option>Sonstiges</option>
           </select>
         </div>
@@ -885,7 +961,11 @@
         </div>
         <div class="field">
           <label>Dauer (Std.)</label>
-          <input type="number" step="0.5" id="f_duration">
+          <div style="display:flex; gap:8px;">
+            <input type="number" step="0.5" id="f_duration" style="flex:1;">
+            <button type="button" class="btn btn-ghost" id="timerToggleBtn" style="white-space:nowrap;">▶ Timer</button>
+          </div>
+          <p id="timerDisplay" class="tab-hint" style="margin:4px 0 0; display:none;"></p>
         </div>
       </div>
       <div class="field-row">
@@ -909,6 +989,10 @@
       <div class="field" style="display:flex; align-items:center; gap:8px;">
         <input type="checkbox" id="f_pricewatch" style="width:auto;">
         <label style="margin:0;" for="f_pricewatch">💰 Preis beobachten (im Sales Tracker anzeigen)</label>
+      </div>
+      <div class="field" id="preorderField" style="display:none; align-items:center; gap:8px; flex-direction:row;">
+        <input type="checkbox" id="f_preordered" style="width:auto;">
+        <label style="margin:0;" for="f_preordered">🎟️ Vorbestellt</label>
       </div>
       <div class="modal-actions">
         <button type="button" class="btn btn-danger" id="deleteBtn" style="display:none;">Löschen</button>
@@ -1016,7 +1100,22 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   }
 });
 
+/* ---------- Offline-Hinweis ---------- */
+function updateOfflineHint(){
+  const el = document.getElementById('offlineHint');
+  if (!el) return;
+  if (navigator.onLine){
+    el.style.display = 'none';
+  } else {
+    el.style.display = 'flex';
+    el.innerHTML = '<span>⚠️ Keine Internetverbindung - Speichern, Datenbank-Zugriff und Steam-Funktionen funktionieren gerade nicht.</span>';
+  }
+}
+window.addEventListener('online', updateOfflineHint);
+window.addEventListener('offline', updateOfflineHint);
+
 (async function initAuth(){
+  updateOfflineHint();
   const saved = loadSavedSession();
   if (saved){
     accessToken = saved.access_token;
@@ -1095,6 +1194,73 @@ window.storage = {
   set: async (key, value, _shared) => supaSet(key, value),
 };
 
+let lastRenderedIds = [];
+let selectedIds = new Set();
+
+// Farbcodierung für Fazit-Noten (nutzt dieselbe Skala wie parseVerdict: niedrig = gut)
+function getVerdictColor(verdict){
+  const v = parseVerdict(verdict);
+  if (v === null) return 'var(--text-muted)';
+  if (v <= 2) return '#3ecf8e';
+  if (v <= 3.5) return '#e8a33d';
+  return '#e8556b';
+}
+
+function updateBulkActionBar(){
+  const bar = document.getElementById('bulkActionBar');
+  if (selectedIds.size === 0){
+    bar.style.display = 'none';
+    return;
+  }
+  bar.style.display = 'flex';
+  document.getElementById('bulkSelectedCount').textContent = selectedIds.size + ' ausgewählt';
+}
+
+document.getElementById('selectAllCheckbox').addEventListener('change', (e) => {
+  document.querySelectorAll('.row-select').forEach(cb => {
+    cb.checked = e.target.checked;
+    if (e.target.checked) selectedIds.add(cb.dataset.id);
+    else selectedIds.delete(cb.dataset.id);
+  });
+  updateBulkActionBar();
+});
+
+document.getElementById('bulkClearBtn').addEventListener('click', () => {
+  selectedIds.clear();
+  renderTable();
+  updateBulkActionBar();
+});
+
+document.getElementById('bulkApplyStatusBtn').addEventListener('click', async () => {
+  const newStatus = document.getElementById('bulkStatusSelect').value;
+  if (!newStatus || selectedIds.size === 0) return;
+  const ok = await showConfirm(`Status von ${selectedIds.size} Spiel(en) auf "${newStatus}" setzen?`);
+  if (!ok) return;
+  games.forEach(g => { if (selectedIds.has(g.id)) g.status = newStatus; });
+  selectedIds.clear();
+  render();
+  await saveGames();
+  showToast('✓ Status aktualisiert.', 'success');
+});
+
+document.getElementById('bulkDeleteBtn').addEventListener('click', async () => {
+  if (selectedIds.size === 0) return;
+  const ok = await showConfirm(`${selectedIds.size} Spiel(e) wirklich unwiderruflich löschen?`);
+  if (!ok) return;
+  games = games.filter(g => !selectedIds.has(g.id));
+  selectedIds.clear();
+  render();
+  await saveGames();
+  showToast('🗑️ Spiele gelöscht.', 'warn');
+  refreshDupPanelIfOpen();
+});
+
+const VR_PLATFORMS = ['Meta Quest', 'PlayStation VR2', 'Sonstige VR'];
+function isVrGame(g){ return VR_PLATFORMS.includes(g.platform); }
+function detectVrFromTitle(title){
+  return /\bvr\b/i.test(title) || /\bvirtual reality\b/i.test(title);
+}
+
 const STATUS_COLORS = {
   'Kommt noch': '#8a92ab',
   'Noch zocken': '#3355ee',
@@ -1166,34 +1332,40 @@ function render(){
   statusFilter.innerHTML = '<option value="">Alle Status</option>' + statuses.map(s=>`<option ${s===curStatus?'selected':''}>${s}</option>`).join('');
   prioFilter.innerHTML = '<option value="">Alle Prioritäten</option>' + prios.map(p=>`<option ${p===curPrio?'selected':''}>${p}</option>`).join('');
 
-  renderMonthRecap();
-  renderListeCountdown();
+  renderDashboard();
   renderBackupReminder();
   renderTable();
   updateAppBadge();
+  const vrTab = document.getElementById('tab-vr');
+  if (vrTab && vrTab.style.display !== 'none') renderVrTab();
 }
 
-function renderMonthRecap(){
-  const el = document.getElementById('monthRecap');
+function renderDashboard(){
+  const el = document.getElementById('dashboardCard');
+  const backlogCount = games.filter(g => ['Noch zocken','Am zocken','Pausiert','Kommt noch'].includes(g.status)).length;
+
   const now = new Date();
   const ym = now.toISOString().slice(0,7);
   const monthGames = games.filter(g => g.finished && g.finished.slice(0,7) === ym);
-  if (monthGames.length === 0){ el.style.display = 'none'; return; }
-  const hours = monthGames.reduce((s,g)=>s+(parseFloat(g.duration)||0),0);
-  el.style.display = 'block';
-  el.innerHTML = `📅 Im ${MONTH_NAMES_DE[now.getMonth()]}: <b>${monthGames.length}</b> Spiel${monthGames.length===1?'':'e'} durchgezockt${hours>0 ? `, <b>${hours.toFixed(0)} Std.</b>` : ''}`;
-}
+  const monthHours = monthGames.reduce((s,g)=>s+(parseFloat(g.duration)||0),0);
 
-function renderListeCountdown(){
-  const el = document.getElementById('listeCountdown');
-  const today = new Date().toISOString().slice(0,10);
-  const next = games
-    .filter(g => g.releasedate && g.releasedate > today)
-    .sort((a,b) => a.releasedate.localeCompare(b.releasedate))[0];
-  if (!next){ el.style.display = 'none'; return; }
-  const days = Math.ceil((new Date(next.releasedate) - new Date(today)) / 86400000);
-  el.style.display = 'flex';
-  el.innerHTML = `⏳ Nächstes Release: <b>${escapeHtml(next.title)}</b> - noch ${days === 0 ? 'heute' : days === 1 ? '1 Tag' : days + ' Tage'}`;
+  const today = now.toISOString().slice(0,10);
+  const next = games.filter(g => g.releasedate && g.releasedate > today).sort((a,b) => a.releasedate.localeCompare(b.releasedate))[0];
+  let countdownText = 'Kein anstehendes Release';
+  if (next){
+    const days = Math.ceil((new Date(next.releasedate) - new Date(today)) / 86400000);
+    countdownText = `<b>${escapeHtml(next.title)}</b> - noch ${days === 0 ? 'heute' : days === 1 ? '1 Tag' : days + ' Tage'}`;
+  }
+
+  const lastFinished = [...games].filter(g => g.finished).sort((a,b) => b.finished.localeCompare(a.finished))[0];
+
+  el.style.display = 'grid';
+  el.innerHTML = `
+    <div class="dash-item"><span class="dash-label">Backlog</span><span class="dash-value"><b>${backlogCount}</b> Spiele</span></div>
+    <div class="dash-item"><span class="dash-label">Im ${MONTH_NAMES_DE[now.getMonth()]}</span><span class="dash-value">${monthGames.length ? `<b>${monthGames.length}</b> durchgezockt${monthHours>0 ? `, <b>${monthHours.toFixed(0)} Std.</b>` : ''}` : 'noch keins'}</span></div>
+    <div class="dash-item"><span class="dash-label">⏳ Nächstes Release</span><span class="dash-value">${countdownText}</span></div>
+    <div class="dash-item"><span class="dash-label">Zuletzt durchgezockt</span><span class="dash-value">${lastFinished ? `<b>${escapeHtml(lastFinished.title)}</b>` : '–'}</span></div>
+  `;
 }
 
 function renderBackupReminder(){
@@ -1225,6 +1397,7 @@ function renderTable(){
   const prioVal = document.getElementById('prioFilter').value;
 
   let list = games.filter(g => {
+    if (isVrGame(g)) return false;
     if (search){
       const inTitle = g.title.toLowerCase().includes(search);
       const inNotes = (g.notes || '').toLowerCase().includes(search);
@@ -1248,6 +1421,8 @@ function renderTable(){
     el.textContent = el.dataset.col === col ? (dir === 'asc' ? '▲' : '▼') : '';
   });
 
+  lastRenderedIds = list.map(g => g.id);
+
   const tbody = document.getElementById('tableBody');
   const emptyState = document.getElementById('emptyState');
   const mobileCards = document.getElementById('mobileCards');
@@ -1266,21 +1441,34 @@ function renderTable(){
 
   tbody.innerHTML = list.map(g => {
     const color = STATUS_COLORS[g.status] || '#565f78';
+    const verdictColor = getVerdictColor(g.verdict);
     return `<tr data-id="${g.id}">
+      <td><input type="checkbox" class="row-select" data-id="${g.id}" ${selectedIds.has(g.id)?'checked':''}></td>
       <td class="row-cover-cell">${g.cover ? `<img class="row-cover" src="${g.cover}" alt="">` : ''}</td>
-      <td class="title-cell">${escapeHtml(g.title)}${(g.platform && !(g.source === 'steam' && g.platform === 'PC')) ? `<span class="platform-tag">${escapeHtml(g.platform)}</span>` : ''}${g.source === 'steam' ? `<img class="steam-badge" src="steam-icon.png" title="Von Steam importiert" alt="Steam">` : ''}${isDusty(g) ? `<span class="dusty-flag" title="Seit über einem Jahr im Backlog ohne Fortschritt">🕸️</span>` : ''}<a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></td>
+      <td class="title-cell">${escapeHtml(g.title)}${(g.platform && !(g.source === 'steam' && g.platform === 'PC')) ? `<span class="platform-tag">${escapeHtml(g.platform)}</span>` : ''}${g.source === 'steam' ? `<img class="steam-badge" src="steam-icon.png" title="Von Steam importiert" alt="Steam">` : ''}${isDusty(g) ? `<span class="dusty-flag" title="Seit über einem Jahr im Backlog ohne Fortschritt">🕸️</span>` : ''}${g.preordered ? `<span class="preorder-flag" title="Vorbestellt">🎟️</span>` : ''}<a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></td>
       <td><span class="status-pill" style="background:${color}22; color:${color}; border:1px solid ${color}55;">${g.status||'–'}</span></td>
       <td class="prio-tag">${(g.status === 'Noch zocken' && g.priority) ? g.priority.replace(/^[0-9]+\\.\\s*/,'') : '<span class="muted">–</span>'}</td>
       <td>${g.price ? parseFloat(g.price).toFixed(2)+' €' : '<span class="muted">–</span>'}</td>
       <td>${g.duration ? parseFloat(g.duration).toFixed(0)+' Std.' : '<span class="muted">–</span>'}</td>
-      <td>${g.verdict || '<span class="muted">–</span>'}</td>
+      <td>${g.verdict ? `<span class="verdict-pill" style="background:${verdictColor}22; color:${verdictColor};">${escapeHtml(g.verdict)}</span>` : '<span class="muted">–</span>'}</td>
       <td>${g.finished || '<span class="muted">–</span>'}</td>
       <td class="muted">${g.lang || '–'}</td>
     </tr>`;
   }).join('');
 
   tbody.querySelectorAll('tr').forEach(tr => {
-    tr.addEventListener('click', () => openEdit(tr.dataset.id));
+    tr.addEventListener('click', (e) => {
+      if (e.target.classList.contains('row-select')) return;
+      openEdit(tr.dataset.id);
+    });
+  });
+  tbody.querySelectorAll('.row-select').forEach(cb => {
+    cb.addEventListener('click', (e) => e.stopPropagation());
+    cb.addEventListener('change', (e) => {
+      if (e.target.checked) selectedIds.add(e.target.dataset.id);
+      else selectedIds.delete(e.target.dataset.id);
+      updateBulkActionBar();
+    });
   });
   tbody.querySelectorAll('.row-hltb').forEach(link => {
     link.addEventListener('click', (e) => e.stopPropagation());
@@ -1292,13 +1480,13 @@ function renderTable(){
     return `<div class="mcard" data-id="${g.id}">
       <div class="mcard-top">
         ${g.cover ? `<img class="mcard-cover" src="${g.cover}" alt="">` : ''}
-        <span class="mcard-title" style="flex:1;">${escapeHtml(g.title)}${isDusty(g) ? ` <span class="dusty-flag" title="Seit über einem Jahr im Backlog">🕸️</span>` : ''} <a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></span>
+        <span class="mcard-title" style="flex:1;">${escapeHtml(g.title)}${isDusty(g) ? ` <span class="dusty-flag" title="Seit über einem Jahr im Backlog">🕸️</span>` : ''}${g.preordered ? ` <span class="preorder-flag" title="Vorbestellt">🎟️</span>` : ''} <a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></span>
         <span class="status-pill" style="background:${color}22; color:${color}; border:1px solid ${color}55; flex-shrink:0;">${g.status||'–'}</span>
       </div>
       <div class="mcard-meta">
         ${g.price ? `<span><b>${parseFloat(g.price).toFixed(2)} €</b></span>` : ''}
         ${g.duration ? `<span><b>${parseFloat(g.duration).toFixed(0)} Std.</b></span>` : ''}
-        ${g.verdict ? `<span>Fazit: <b>${escapeHtml(g.verdict)}</b></span>` : ''}
+        ${g.verdict ? `<span>Fazit: <b style="color:${getVerdictColor(g.verdict)};">${escapeHtml(g.verdict)}</b></span>` : ''}
         ${prio ? `<span>Prio: <b>${escapeHtml(prio)}</b></span>` : ''}
         ${g.finished ? `<span>${g.finished}</span>` : ''}
         ${g.lang ? `<span>${g.lang}</span>` : ''}
@@ -1345,6 +1533,76 @@ function renderCoverGrid(list){
     link.addEventListener('click', (e) => e.stopPropagation());
   });
 }
+
+/* ---------- VR-Register ---------- */
+function renderVrTab(){
+  const search = document.getElementById('vrSearchInput').value.toLowerCase();
+  const statusVal = document.getElementById('vrStatusFilter').value;
+
+  const vrGames = games.filter(isVrGame);
+  const statuses = [...new Set(vrGames.map(g=>g.status).filter(Boolean))];
+  const statusFilterEl = document.getElementById('vrStatusFilter');
+  const curStatus = statusFilterEl.value;
+  statusFilterEl.innerHTML = '<option value="">Alle Status</option>' + statuses.map(s=>`<option ${s===curStatus?'selected':''}>${s}</option>`).join('');
+
+  let list = vrGames.filter(g => {
+    if (search && !g.title.toLowerCase().includes(search)) return false;
+    if (statusVal && g.status !== statusVal) return false;
+    return true;
+  });
+  list.sort((a,b) => a.title.localeCompare(b.title));
+
+  const tbody = document.getElementById('vrTableBody');
+  const emptyState = document.getElementById('vrEmptyState');
+  const mobileCards = document.getElementById('vrMobileCards');
+
+  if (list.length === 0){
+    tbody.innerHTML = '';
+    mobileCards.innerHTML = '';
+    emptyState.style.display = 'block';
+    return;
+  }
+  emptyState.style.display = 'none';
+
+  tbody.innerHTML = list.map(g => {
+    const color = STATUS_COLORS[g.status] || '#565f78';
+    return `<tr data-id="${g.id}">
+      <td class="row-cover-cell">${g.cover ? `<img class="row-cover" src="${g.cover}" alt="">` : ''}</td>
+      <td class="title-cell">${escapeHtml(g.title)}</td>
+      <td><span class="status-pill" style="background:${color}22; color:${color}; border:1px solid ${color}55;">${g.status||'–'}</span></td>
+      <td class="muted">${escapeHtml(g.platform||'–')}</td>
+      <td>${g.price ? parseFloat(g.price).toFixed(2)+' €' : '<span class="muted">–</span>'}</td>
+      <td>${g.duration ? parseFloat(g.duration).toFixed(0)+' Std.' : '<span class="muted">–</span>'}</td>
+      <td>${g.verdict || '<span class="muted">–</span>'}</td>
+      <td>${g.finished || '<span class="muted">–</span>'}</td>
+    </tr>`;
+  }).join('');
+  tbody.querySelectorAll('tr').forEach(tr => {
+    tr.addEventListener('click', () => openEdit(tr.dataset.id));
+  });
+
+  mobileCards.innerHTML = list.map(g => {
+    const color = STATUS_COLORS[g.status] || '#565f78';
+    return `<div class="mcard" data-id="${g.id}">
+      <div class="mcard-top">
+        ${g.cover ? `<img class="mcard-cover" src="${g.cover}" alt="">` : ''}
+        <span class="mcard-title" style="flex:1;">${escapeHtml(g.title)}</span>
+        <span class="status-pill" style="background:${color}22; color:${color}; border:1px solid ${color}55; flex-shrink:0;">${g.status||'–'}</span>
+      </div>
+      <div class="mcard-meta">
+        <span>${escapeHtml(g.platform||'–')}</span>
+        ${g.price ? `<span><b>${parseFloat(g.price).toFixed(2)} €</b></span>` : ''}
+        ${g.duration ? `<span><b>${parseFloat(g.duration).toFixed(0)} Std.</b></span>` : ''}
+        ${g.verdict ? `<span>Fazit: <b>${escapeHtml(g.verdict)}</b></span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  mobileCards.querySelectorAll('.mcard').forEach(card => {
+    card.addEventListener('click', () => openEdit(card.dataset.id));
+  });
+}
+document.getElementById('vrSearchInput').addEventListener('input', renderVrTab);
+document.getElementById('vrStatusFilter').addEventListener('change', renderVrTab);
 
 /* ---------- Moderne Benachrichtigungen (statt Browser-alert/confirm) ---------- */
 function showToast(message, type='info', duration=3500){
@@ -1413,6 +1671,18 @@ document.addEventListener('keydown', (e) => {
         deleteBtn.click();
       }
     }
+    const inTextField = ['INPUT','TEXTAREA'].includes(document.activeElement.tagName);
+    if (!inTextField && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && lastRenderedIds.length > 0){
+      const curId = document.getElementById('gameId').value;
+      const idx = lastRenderedIds.indexOf(curId);
+      if (idx > -1){
+        const nextIdx = e.key === 'ArrowDown' ? idx + 1 : idx - 1;
+        if (nextIdx >= 0 && nextIdx < lastRenderedIds.length){
+          e.preventDefault();
+          openEdit(lastRenderedIds[nextIdx]);
+        }
+      }
+    }
   }
 });
 
@@ -1430,6 +1700,13 @@ function togglePriorityField(){
   } else {
     field.style.display = 'none';
     document.getElementById('f_priority').value = '';
+  }
+  const preorderField = document.getElementById('preorderField');
+  if (status === 'Kommt noch'){
+    preorderField.style.display = 'flex';
+  } else {
+    preorderField.style.display = 'none';
+    document.getElementById('f_preordered').checked = false;
   }
 }
 document.getElementById('f_status').addEventListener('change', togglePriorityField);
@@ -1463,6 +1740,7 @@ function openEdit(id){
   document.getElementById('f_releasedate').value = g.releasedate || '';
   document.getElementById('f_notes').value = g.notes || '';
   document.getElementById('f_pricewatch').checked = !!g.pricewatch;
+  document.getElementById('f_preordered').checked = !!g.preordered;
   document.getElementById('f_platform').value = g.platform || '';
   document.getElementById('f_cover').value = g.cover || '';
   document.getElementById('f_genre').value = g.genre || '';
@@ -1472,7 +1750,51 @@ function openEdit(id){
   togglePriorityField();
 }
 
+/* ---------- Spielzeit-Timer ---------- */
+let timerStartTs = null;
+let timerInterval = null;
+
+function formatTimerElapsed(ms){
+  const totalSec = Math.floor(ms/1000);
+  const h = Math.floor(totalSec/3600), m = Math.floor((totalSec%3600)/60), s = totalSec%60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function startTimer(){
+  timerStartTs = Date.now();
+  document.getElementById('timerToggleBtn').textContent = '⏹ Stopp';
+  document.getElementById('timerDisplay').style.display = 'block';
+  timerInterval = setInterval(() => {
+    document.getElementById('timerDisplay').textContent = '⏱ Läuft: ' + formatTimerElapsed(Date.now() - timerStartTs);
+  }, 1000);
+}
+
+function stopTimer(applyToField){
+  if (!timerStartTs) return;
+  clearInterval(timerInterval);
+  timerInterval = null;
+  const elapsedHours = (Date.now() - timerStartTs) / 3600000;
+  timerStartTs = null;
+  document.getElementById('timerToggleBtn').textContent = '▶ Timer';
+  document.getElementById('timerDisplay').style.display = 'none';
+  if (applyToField && elapsedHours > 0){
+    const field = document.getElementById('f_duration');
+    const current = parseFloat(field.value) || 0;
+    field.value = Math.round((current + elapsedHours) * 10) / 10;
+    showToast(`⏱ ${elapsedHours.toFixed(2)} Std. zur Dauer hinzugefügt.`, 'success');
+  }
+}
+
+document.getElementById('timerToggleBtn').addEventListener('click', () => {
+  if (timerStartTs) stopTimer(true);
+  else startTimer();
+});
+
 function closeModal(){
+  if (timerStartTs){
+    stopTimer(false);
+    showToast('⏱ Timer verworfen, da Fenster geschlossen wurde.', 'warn');
+  }
   document.getElementById('overlay').style.display = 'none';
 }
 
@@ -1483,7 +1805,12 @@ document.getElementById('overlay').addEventListener('click', (e) => { if (e.targ
 document.getElementById('gameForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   try{
+    if (timerStartTs) stopTimer(true);
     const id = document.getElementById('gameId').value;
+    let chosenPlatform = document.getElementById('f_platform').value;
+    if (!chosenPlatform && detectVrFromTitle(document.getElementById('f_title').value)){
+      chosenPlatform = 'Sonstige VR';
+    }
     const data = {
       title: document.getElementById('f_title').value.trim(),
       status: document.getElementById('f_status').value,
@@ -1498,7 +1825,8 @@ document.getElementById('gameForm').addEventListener('submit', async (e) => {
       releasedate: document.getElementById('f_releasedate').value,
       notes: document.getElementById('f_notes').value.trim(),
       pricewatch: document.getElementById('f_pricewatch').checked,
-      platform: document.getElementById('f_platform').value,
+      preordered: document.getElementById('f_preordered').checked,
+      platform: chosenPlatform,
       cover: document.getElementById('f_cover').value,
       genre: document.getElementById('f_genre').value,
     };
@@ -1770,7 +2098,7 @@ const PRIORITY_WEIGHTS = {
 document.getElementById('randomPickBtn').addEventListener('click', () => {
   const pool = games.filter(g => g.status === 'Noch zocken');
   if (pool.length === 0){
-    alert('Keine Spiele mit Status "Noch zocken" gefunden.');
+    showToast('Keine Spiele mit Status "Noch zocken" gefunden.', 'warn');
     return;
   }
   // Gewichtete Auswahl: höhere Priorität kommt häufiger dran, ohne niedrigere komplett auszuschließen
@@ -1780,7 +2108,22 @@ document.getElementById('randomPickBtn').addEventListener('click', () => {
     for (let i=0; i<weight; i++) weighted.push(g);
   });
   const pick = weighted[Math.floor(Math.random() * weighted.length)];
-  alert('🎲 Die Wahl ist gefallen:\n\n' + pick.title);
+
+  if (document.getElementById('tab-liste').style.display === 'none'){
+    document.querySelector('.tab-btn[data-tab="liste"]').click();
+  }
+  if (currentView !== 'grid'){
+    currentView = 'grid'; localStorage.setItem('zl_view', currentView); applyView();
+  }
+  setTimeout(() => {
+    const tile = document.querySelector(`.ctile[data-id="${pick.id}"]`);
+    if (tile){
+      tile.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      tile.classList.add('pulse-highlight');
+      setTimeout(() => tile.classList.remove('pulse-highlight'), 3200);
+    }
+  }, 150);
+  showToast('🎲 Die Wahl ist gefallen: <b>' + escapeHtml(pick.title) + '</b>', 'success', 4000);
 });
 
 /* ---------- Steam-Bibliothek importieren ---------- */
@@ -1825,7 +2168,7 @@ document.getElementById('steamImportBtn').addEventListener('click', async () => 
         notes: sg.playtime_hours > 0 ? `Von Steam importiert (${sg.playtime_hours} Std. gespielt)` : 'Von Steam importiert',
         cover: sg.background_image,
         genre: '',
-        platform: 'PC',
+        platform: detectVrFromTitle(sg.name) ? 'Sonstige VR' : 'PC',
         source: 'steam',
       });
       byTitle.set(sg.name.toLowerCase(), games[games.length-1]);
@@ -1895,6 +2238,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.dataset.tab === 'statistik') renderStats();
     if (btn.dataset.tab === 'datenbank') initDatenbankTab();
     if (btn.dataset.tab === 'sales') renderSales();
+    if (btn.dataset.tab === 'vr') renderVrTab();
   });
 });
 
@@ -2280,6 +2624,7 @@ function renderKalender(){
       <span class="cal-title">${escapeHtml(g.title)}</span>
       ${countdown}
       <span class="cal-badge ${upcoming ? 'upcoming' : 'released'}">${upcoming ? 'Kommt noch' : 'Erschienen'}</span>
+      ${g.preordered ? `<span class="cal-badge" style="background:#3355ee22; color:var(--royal-hi); border:1px solid #3355ee55;">🎟️ Vorbestellt</span>` : ''}
       ${g.price ? `<span class="muted">${parseFloat(g.price).toFixed(2)} €</span>` : ''}
       <button class="cal-sales-btn" type="button" data-id="${g.id}" title="Preis beobachten & zum Sales Tracker">💰</button>
       <a class="cal-trailer" href="${trailerUrl}" target="_blank" rel="noopener">▶ Trailer</a>
@@ -2316,6 +2661,7 @@ function proxyFetch(url){
 let dataSource = localStorage.getItem('zl_datasource') || 'rawg';
 
 async function initDatenbankTab(){
+  renderSearchHistory();
   try{
     const res = await window.storage.get('rawg_api_key', false);
     rawgKey = res && res.value ? res.value : null;
@@ -2515,9 +2861,66 @@ document.getElementById('rawgSearchBtn').addEventListener('click', () => {
   if (!q) return;
   document.querySelectorAll('#rawgMonthChips .month-chip').forEach(c => c.classList.remove('active'));
   rawgFetch(buildSourceUrl('search', { q }));
+  addToSearchHistory(q);
 });
 document.getElementById('rawgSearchInput').addEventListener('keydown', (e) => {
   if (e.key === 'Enter'){ e.preventDefault(); document.getElementById('rawgSearchBtn').click(); }
+});
+
+/* ---------- Suchverlauf im Datenbank-Register ---------- */
+function getSearchHistory(){
+  try{ return JSON.parse(localStorage.getItem('zl_db_search_history') || '[]'); }catch(e){ return []; }
+}
+function addToSearchHistory(q){
+  let hist = getSearchHistory().filter(x => x.toLowerCase() !== q.toLowerCase());
+  hist.unshift(q);
+  hist = hist.slice(0, 8);
+  localStorage.setItem('zl_db_search_history', JSON.stringify(hist));
+  renderSearchHistory();
+}
+function renderSearchHistory(){
+  const hist = getSearchHistory();
+  const el = document.getElementById('dbSearchHistory');
+  if (hist.length === 0){ el.innerHTML = ''; return; }
+  el.innerHTML = hist.map(q => `<button class="month-chip" data-q="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join('');
+  el.querySelectorAll('.month-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.getElementById('rawgSearchInput').value = chip.dataset.q;
+      document.getElementById('rawgSearchBtn').click();
+    });
+  });
+}
+
+/* ---------- "Ähnlich wie X"-Suche ---------- */
+document.getElementById('similarToBtn').addEventListener('click', async () => {
+  const title = document.getElementById('similarToInput').value.trim();
+  if (!title) return;
+  document.querySelectorAll('#rawgMonthChips .month-chip').forEach(c => c.classList.remove('active'));
+  document.getElementById('dbGrid').innerHTML = '<p class="muted">Suche ähnliche Spiele...</p>';
+  document.getElementById('rawgError').textContent = '';
+  try{
+    const res = await proxyFetch(buildSourceUrl('search', { q: title }));
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const match = (data.results || [])[0];
+    if (!match || !match.genres || match.genres.length === 0){
+      document.getElementById('dbGrid').innerHTML = '<p class="muted">Kein Genre für dieses Spiel gefunden - Empfehlung nicht möglich.</p>';
+      return;
+    }
+    const genre = match.genres[0].name;
+    const res2 = await proxyFetch(buildSourceUrl('genre', { genre }));
+    if (!res2.ok) throw new Error('HTTP ' + res2.status);
+    const data2 = await res2.json();
+    const owned = new Set(games.map(g => g.title.toLowerCase()));
+    const results = (data2.results || []).filter(r => r.name.toLowerCase() !== match.name.toLowerCase() && !owned.has(r.name.toLowerCase()));
+    renderDbGrid(results);
+    addToSearchHistory(title);
+  }catch(err){
+    document.getElementById('rawgError').textContent = 'Ähnliche-Spiele-Suche fehlgeschlagen: ' + err.message;
+  }
+});
+document.getElementById('similarToInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter'){ e.preventDefault(); document.getElementById('similarToBtn').click(); }
 });
 
 function renderDbGrid(results){
@@ -2575,7 +2978,7 @@ async function toggleGameFromDbResult(r, btn){
       notes: 'Aus Datenbank hinzugefügt',
       cover: r.background_image || '',
       genre: (r.genres || []).map(g => g.name).join(', '),
-      platform: '',
+      platform: detectVrFromTitle(r.name) ? 'Sonstige VR' : '',
     });
     btn.textContent = '✓ In deiner Liste (entfernen)';
     btn.classList.add('added');
@@ -3226,6 +3629,77 @@ async function generateYearVideo(){
 }
 
 document.getElementById('genVideoBtn').addEventListener('click', generateYearVideo);
+
+document.getElementById('genImageBtn').addEventListener('click', async () => {
+  const year = document.getElementById('wrapYearSelect').value;
+  if (!year){ showToast('Kein Jahr mit Daten vorhanden.', 'warn'); return; }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 1280; canvas.height = 1400;
+  const ctx = canvas.getContext('2d');
+  drawBackground(ctx, canvas.width, canvas.height);
+
+  const yearGamesAll = games.filter(g => g.finished && g.finished.slice(0,4) === year);
+  const hours = yearGamesAll.reduce((s,g)=>s+(parseFloat(g.duration)||0),0);
+  const spent = yearGamesAll.reduce((s,g)=>s+(parseFloat(g.price)||0),0);
+  const genreCounts = {};
+  yearGamesAll.forEach(g => { if (g.genre) g.genre.split(',').map(x=>x.trim()).filter(Boolean).forEach(gr => genreCounts[gr]=(genreCounts[gr]||0)+1); });
+  const topGenre = Object.entries(genreCounts).sort((a,b)=>b[1]-a[1])[0];
+
+  // Titelbereich
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#6b85ff';
+  ctx.font = '700 26px sans-serif';
+  ctx.fillText('DEIN GAMING-JAHR', canvas.width/2, 90);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 80px sans-serif';
+  ctx.fillText(year, canvas.width/2, 190);
+
+  // Kennzahlen
+  const stats = [
+    [String(yearGamesAll.length), 'Spiele durchgezockt'],
+    [hours.toFixed(0) + ' Std.', 'Gesamtspielzeit'],
+    [spent.toFixed(0) + ' €', 'Ausgegeben'],
+    [topGenre ? topGenre[0] : '–', 'Lieblingsgenre'],
+  ];
+  const colW = canvas.width / stats.length;
+  stats.forEach(([val,label], i) => {
+    const x = colW * i + colW/2;
+    ctx.fillStyle = '#6b85ff';
+    ctx.font = '700 38px sans-serif';
+    ctx.fillText(val, x, 300);
+    ctx.fillStyle = '#8a92ab';
+    ctx.font = '400 15px sans-serif';
+    ctx.fillText(label, x, 330);
+  });
+
+  // Highlights (in einen eigenen Bereich unterhalb der Kennzahlen versetzt, ohne den Hintergrund oben zu überschreiben)
+  const verdictScored = yearGamesAll.map(g => ({ g, score: parseVerdict(g.verdict) })).filter(x => x.score !== null);
+  let bestGames = [], bestImages = [];
+  if (verdictScored.length){
+    const bestScore = Math.min(...verdictScored.map(x => x.score));
+    bestGames = verdictScored.filter(x => x.score === bestScore).map(x => x.g).slice(0,3);
+    bestImages = await Promise.all(bestGames.map(g => loadImageSafe(g.cover)));
+  }
+  const longestGame = [...yearGamesAll].filter(g => parseFloat(g.duration) > 0).sort((a,b) => (parseFloat(b.duration)||0) - (parseFloat(a.duration)||0))[0];
+  const longestImg = longestGame ? await loadImageSafe(longestGame.cover) : null;
+  ctx.save();
+  ctx.translate(0, 380);
+  drawHighlightsSlide(ctx, canvas.width, canvas.height - 380, year, bestGames, null, bestImages, longestGame, longestImg);
+  ctx.restore();
+
+  canvas.toBlob((blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `zockerliste-jahresrueckblick-${year}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('📸 Bild heruntergeladen.', 'success');
+  }, 'image/png');
+});
 document.getElementById('customMusicInput').addEventListener('change', (e) => {
   const f = e.target.files[0];
   document.getElementById('customMusicName').textContent = f ? `🎵 ${f.name}` : 'Keine Datei gewählt - generierte Musik wird verwendet';
