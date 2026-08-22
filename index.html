@@ -293,6 +293,10 @@
   }
   .db-heart:hover{border-color:var(--red); color:var(--red);}
   .db-heart.added{background:var(--red); border-color:var(--red); color:#fff; cursor:default;}
+  .db-btn-row{display:flex; gap:8px; margin-top:auto;}
+  .db-btn-row .db-heart{margin-top:0; flex:1;}
+  .db-btn-row .cal-trailer{font-size:12.5px; padding:7px 10px;}
+  .db-card .cal-trailer-embed{margin-top:8px; max-width:none; aspect-ratio:16/9;}
   .cal-cover{width:44px; height:44px; border-radius:6px; object-fit:cover; flex-shrink:0;}
 
   /* Inline DB search in modal */
@@ -569,7 +573,7 @@
 <div id="toastContainer" class="toast-container"></div>
 
 <div id="loginScreen" class="login-screen">
-  <div class="login-box">
+  <div class="login-box" id="loginBoxNormal">
     <h1 class="login-title">Zocker<span>liste</span></h1>
     <p class="login-sub">Bitte anmelden</p>
     <form id="loginForm">
@@ -583,6 +587,35 @@
       </div>
       <p id="loginError" style="color:var(--red); font-size:13px; min-height:18px;"></p>
       <button type="submit" class="btn btn-primary" style="width:100%;">Anmelden</button>
+      <button type="button" id="showForgotBtn" class="btn btn-ghost" style="width:100%; margin-top:8px;">Passwort vergessen?</button>
+    </form>
+  </div>
+
+  <div class="login-box" id="loginBoxForgot" style="display:none;">
+    <h1 class="login-title">Zocker<span>liste</span></h1>
+    <p class="login-sub">Passwort zurücksetzen</p>
+    <p class="tab-hint" style="margin-bottom:14px;">Trag deine E-Mail-Adresse ein - du bekommst einen Link zum Zurücksetzen zugeschickt.</p>
+    <form id="forgotForm">
+      <div class="field">
+        <label>E-Mail</label>
+        <input type="email" id="forgotEmail" required autocomplete="username">
+      </div>
+      <p id="forgotStatus" style="font-size:13px; min-height:18px;"></p>
+      <button type="submit" class="btn btn-primary" style="width:100%;">Link zusenden</button>
+      <button type="button" id="backToLoginBtn" class="btn btn-ghost" style="width:100%; margin-top:8px;">Zurück zur Anmeldung</button>
+    </form>
+  </div>
+
+  <div class="login-box" id="loginBoxNewPassword" style="display:none;">
+    <h1 class="login-title">Zocker<span>liste</span></h1>
+    <p class="login-sub">Neues Passwort festlegen</p>
+    <form id="newPasswordForm">
+      <div class="field">
+        <label>Neues Passwort</label>
+        <input type="password" id="newPasswordInput" required autocomplete="new-password" minlength="6">
+      </div>
+      <p id="newPasswordStatus" style="color:var(--red); font-size:13px; min-height:18px;"></p>
+      <button type="submit" class="btn btn-primary" style="width:100%;">Passwort speichern</button>
     </form>
   </div>
 </div>
@@ -593,7 +626,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-23-importfix-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-23-dbtrailer-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
@@ -1186,6 +1219,77 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   }
 });
 
+/* ---------- Passwort vergessen ---------- */
+function showLoginBox(id){
+  ['loginBoxNormal','loginBoxForgot','loginBoxNewPassword'].forEach(boxId => {
+    document.getElementById(boxId).style.display = boxId === id ? 'block' : 'none';
+  });
+}
+document.getElementById('showForgotBtn').addEventListener('click', () => showLoginBox('loginBoxForgot'));
+document.getElementById('backToLoginBtn').addEventListener('click', () => showLoginBox('loginBoxNormal'));
+
+document.getElementById('forgotForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('forgotEmail').value.trim();
+  const statusEl = document.getElementById('forgotStatus');
+  statusEl.style.color = 'var(--text-muted)';
+  statusEl.textContent = 'Sende Link...';
+  try{
+    const redirectTo = window.location.origin + window.location.pathname;
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    statusEl.style.color = 'var(--green)';
+    statusEl.textContent = '✓ E-Mail verschickt (falls dieses Konto existiert) - Link zum Zurücksetzen prüfen.';
+  }catch(err){
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = 'Fehlgeschlagen: ' + err.message;
+  }
+});
+
+document.getElementById('newPasswordForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const newPassword = document.getElementById('newPasswordInput').value;
+  const statusEl = document.getElementById('newPasswordStatus');
+  statusEl.style.color = 'var(--text-muted)';
+  statusEl.textContent = 'Speichere...';
+  try{
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      method: 'PUT',
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${window.__recoveryAccessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ password: newPassword }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    statusEl.style.color = 'var(--green)';
+    statusEl.textContent = '✓ Passwort gespeichert! Du kannst dich jetzt anmelden.';
+    history.replaceState(null, '', window.location.pathname);
+    setTimeout(() => showLoginBox('loginBoxNormal'), 1800);
+  }catch(err){
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = 'Fehlgeschlagen: ' + err.message + ' - Link evtl. abgelaufen, neuen anfordern.';
+  }
+});
+
+// Erkennt den Wiederherstellungs-Link aus der E-Mail (kommt als #access_token=...&type=recovery in der URL an)
+(function checkPasswordRecoveryLink(){
+  const hash = window.location.hash;
+  if (hash.includes('type=recovery')){
+    const params = new URLSearchParams(hash.slice(1));
+    const token = params.get('access_token');
+    if (token){
+      window.__recoveryAccessToken = token;
+      showLoginBox('loginBoxNewPassword');
+    }
+  }
+})();
+
 /* ---------- Offline-Hinweis ---------- */
 function updateOfflineHint(){
   const el = document.getElementById('offlineHint');
@@ -1202,6 +1306,10 @@ window.addEventListener('offline', updateOfflineHint);
 
 (async function initAuth(){
   updateOfflineHint();
+  if (window.location.hash.includes('type=recovery')){
+    showLogin();
+    return;
+  }
   const saved = loadSavedSession();
   if (saved){
     accessToken = saved.access_token;
@@ -3291,7 +3399,11 @@ function renderDbGrid(results){
       <div class="db-body">
         <div class="db-title">${escapeHtml(r.name)}</div>
         <div class="db-date">${r.released || 'TBA'}</div>
-        <button class="db-heart ${already?'added':''}" data-id="${r.id}">${already ? '✓ In deiner Liste (entfernen)' : '❤ Zur Liste hinzufügen'}</button>
+        <div class="db-btn-row">
+          <button class="db-heart ${already?'added':''}" data-id="${r.id}">${already ? '✓ In deiner Liste (entfernen)' : '❤ Zur Liste hinzufügen'}</button>
+          <button class="cal-trailer" type="button" data-title="${escapeHtml(r.name)}">▶ Trailer</button>
+        </div>
+        <div class="cal-trailer-embed" style="display:none;"></div>
       </div>
     </div>`;
   }).join('');
@@ -3303,6 +3415,38 @@ function renderDbGrid(results){
       toggleGameFromDbResult(r, btn);
     });
   });
+  grid.querySelectorAll('.db-card .cal-trailer').forEach(btn => {
+    btn.addEventListener('click', () => toggleDbTrailerEmbed(btn));
+  });
+}
+
+// Wie toggleTrailerEmbed im Kalender, aber der Ziel-Container liegt hier nicht im .cal-item-wrap, sondern direkt im .db-body
+async function toggleDbTrailerEmbed(btn){
+  const embedEl = btn.closest('.db-body').querySelector('.cal-trailer-embed');
+  if (embedEl.style.display !== 'none'){
+    embedEl.style.display = 'none';
+    embedEl.innerHTML = '';
+    btn.textContent = '▶ Trailer';
+    return;
+  }
+  btn.textContent = '⏳ Lade...';
+  embedEl.style.display = 'block';
+  embedEl.innerHTML = '<p class="muted" style="padding:10px;">Suche Trailer...</p>';
+  try{
+    const res = await proxyFetch(`${IGDB_PROXY_URL}?action=youtube&q=${encodeURIComponent(btn.dataset.title + ' trailer')}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.found){
+      embedEl.innerHTML = '<p class="muted" style="padding:10px;">Kein Trailer gefunden.</p>';
+      btn.textContent = '▶ Trailer';
+      return;
+    }
+    embedEl.innerHTML = `<iframe width="100%" height="100%" src="https://www.youtube-nocookie.com/embed/${data.videoId}?autoplay=1" title="Trailer" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+    btn.textContent = '✕ Trailer schließen';
+  }catch(err){
+    embedEl.innerHTML = `<p style="color:var(--red); padding:10px;">Trailer konnte nicht geladen werden: ${err.message}</p>`;
+    btn.textContent = '▶ Trailer';
+  }
 }
 
 // Fügt ein Datenbank-Ergebnis hinzu, oder entfernt es wieder, falls schon in der Liste (Herz-Toggle)
@@ -4119,7 +4263,11 @@ async function renderRecommendations(hof){
       <div class="db-body">
         <div class="db-title">${escapeHtml(r.name)}</div>
         <div class="db-date">${r.released || 'TBA'}</div>
-        <button class="db-heart" data-id="${r.id}">❤ Zur Liste hinzufügen</button>
+        <div class="db-btn-row">
+          <button class="db-heart" data-id="${r.id}">❤ Zur Liste hinzufügen</button>
+          <button class="cal-trailer" type="button" data-title="${escapeHtml(r.name)}">▶ Trailer</button>
+        </div>
+        <div class="cal-trailer-embed" style="display:none;"></div>
       </div>
     </div>`).join('');
     grid.querySelectorAll('.db-heart').forEach(btn => {
@@ -4128,6 +4276,9 @@ async function renderRecommendations(hof){
         if (!r) return;
         toggleGameFromDbResult(r, btn);
       });
+    });
+    grid.querySelectorAll('.db-card .cal-trailer').forEach(btn => {
+      btn.addEventListener('click', () => toggleDbTrailerEmbed(btn));
     });
   }catch(err){
     grid.innerHTML = `<p style="color:var(--red);">Empfehlungen fehlgeschlagen: ${err.message}</p>`;
