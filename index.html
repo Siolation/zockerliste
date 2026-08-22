@@ -311,6 +311,9 @@
   .steam-badge{
     width:14px; height:14px; margin-left:6px; vertical-align:middle; opacity:0.85;
   }
+  .psn-badge{
+    width:14px; height:14px; margin-left:6px; vertical-align:middle; opacity:0.85;
+  }
 
   /* Progress bar */
   .progress-wrap{margin-bottom:20px;}
@@ -485,6 +488,16 @@
     position:absolute; top:6px; right:6px; font-size:9.5px; padding:2px 7px; border-radius:999px;
     font-family:'Rajdhani',sans-serif; font-weight:600;
   }
+  .ctile-platform-badge{
+    position:absolute; bottom:6px; right:6px; z-index:2;
+  }
+  img.ctile-platform-badge{
+    width:20px; height:20px; padding:3px; background:rgba(10,12,20,0.75); border-radius:6px;
+  }
+  .platform-text-badge{
+    background:rgba(10,12,20,0.8); color:#fff; font-size:9px; font-weight:700;
+    padding:3px 6px; border-radius:5px; font-family:'Rajdhani',sans-serif; letter-spacing:0.3px;
+  }
   .ctile-overlay{
     position:absolute; inset:0; background:rgba(10,12,20,0.94); opacity:0; transition:opacity .15s ease;
     display:flex; flex-direction:column; justify-content:center; gap:5px; padding:12px;
@@ -557,7 +570,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-22-allfeatures-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-22-psnlogo-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
@@ -576,10 +589,26 @@
     <div class="side-drawer-section">
       <div class="side-drawer-label">Import / Export</div>
       <button class="drawer-item" id="steamImportBtn" type="button"><img class="steam-badge" src="steam-icon.png" alt="" style="margin-left:0; margin-right:8px;">Steam importieren</button>
+      <button class="drawer-item" id="psnImportBtn" type="button"><img class="psn-badge" src="psn-icon.png" alt="" style="margin-left:0; margin-right:8px;">PlayStation importieren</button>
       <button class="drawer-item" id="exportBtn" type="button">⬇ JSON-Export</button>
       <button class="drawer-item" id="csvExportBtn" type="button">⬇ CSV-Export</button>
       <button class="drawer-item" id="importBtn" type="button">⬆ Import</button>
       <input type="file" id="importFile" accept=".json" style="display:none;">
+    </div>
+    <div class="side-drawer-section">
+      <div class="side-drawer-label">PlayStation-Zugang</div>
+      <p class="tab-hint" style="margin:0 0 8px;">Für den PSN-Import nötig. Läuft alle ~2 Monate ab (oder sofort nach neuem PS-Login) - wenn der Import fehlschlägt, hier erneuern:</p>
+      <ol style="font-size:11.5px; color:var(--text-muted); margin:0 0 10px; padding-left:18px; line-height:1.6;">
+        <li>Auf <a href="https://www.playstation.com/" target="_blank" rel="noopener">playstation.com</a> einloggen</li>
+        <li>Im selben Tab <a href="https://ca.account.sony.com/api/v1/ssocookie" target="_blank" rel="noopener">diese Seite</a> öffnen</li>
+        <li>Den Code zwischen den Anführungszeichen nach <code>"npsso":</code> kopieren</li>
+        <li>Unten einfügen und speichern</li>
+      </ol>
+      <div style="display:flex; gap:6px;">
+        <input type="password" id="psnNpssoInput" placeholder="npsso-Code einfügen..." style="flex:1; font-size:12px;">
+        <button class="btn btn-primary" id="psnNpssoSaveBtn" type="button" style="white-space:nowrap;">Speichern</button>
+      </div>
+      <p id="psnNpssoStatus" class="tab-hint" style="margin:6px 0 0;"></p>
     </div>
     <div class="side-drawer-section">
       <div class="side-drawer-label">Werkzeuge</div>
@@ -1445,7 +1474,7 @@ function renderTable(){
     return `<tr data-id="${g.id}">
       <td><input type="checkbox" class="row-select" data-id="${g.id}" ${selectedIds.has(g.id)?'checked':''}></td>
       <td class="row-cover-cell">${g.cover ? `<img class="row-cover" src="${g.cover}" alt="">` : ''}</td>
-      <td class="title-cell">${escapeHtml(g.title)}${(g.platform && !(g.source === 'steam' && g.platform === 'PC')) ? `<span class="platform-tag">${escapeHtml(g.platform)}</span>` : ''}${g.source === 'steam' ? `<img class="steam-badge" src="steam-icon.png" title="Von Steam importiert" alt="Steam">` : ''}${isDusty(g) ? `<span class="dusty-flag" title="Seit über einem Jahr im Backlog ohne Fortschritt">🕸️</span>` : ''}${g.preordered ? `<span class="preorder-flag" title="Vorbestellt">🎟️</span>` : ''}<a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></td>
+      <td class="title-cell">${escapeHtml(g.title)}${(g.platform && !(g.source === 'steam' && g.platform === 'PC')) ? `<span class="platform-tag">${escapeHtml(g.platform)}</span>` : ''}${g.source === 'steam' ? `<img class="steam-badge" src="steam-icon.png" title="Von Steam importiert" alt="Steam">` : ''}${g.source === 'psn' ? `<img class="psn-badge" src="psn-icon.png" title="Von PlayStation importiert" alt="PSN">` : ''}${isDusty(g) ? `<span class="dusty-flag" title="Seit über einem Jahr im Backlog ohne Fortschritt">🕸️</span>` : ''}${g.preordered ? `<span class="preorder-flag" title="Vorbestellt">🎟️</span>` : ''}<a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></td>
       <td><span class="status-pill" style="background:${color}22; color:${color}; border:1px solid ${color}55;">${g.status||'–'}</span></td>
       <td class="prio-tag">${(g.status === 'Noch zocken' && g.priority) ? g.priority.replace(/^[0-9]+\\.\\s*/,'') : '<span class="muted">–</span>'}</td>
       <td>${g.price ? parseFloat(g.price).toFixed(2)+' €' : '<span class="muted">–</span>'}</td>
@@ -1492,6 +1521,7 @@ function renderTable(){
         ${g.lang ? `<span>${g.lang}</span>` : ''}
         ${(g.platform && !(g.source === 'steam' && g.platform === 'PC')) ? `<span>${escapeHtml(g.platform)}</span>` : ''}
         ${g.source === 'steam' ? `<img class="steam-badge" src="steam-icon.png" title="Von Steam importiert" alt="Steam">` : ''}
+        ${g.source === 'psn' ? `<img class="psn-badge" src="psn-icon.png" title="Von PlayStation importiert" alt="PSN">` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1506,6 +1536,14 @@ function renderTable(){
   renderCoverGrid(list);
 }
 
+// Kleines Plattform-/Quellen-Symbol, das dauerhaft (nicht nur beim Hover) auf den Cover-Kacheln zu sehen ist
+function platformCornerBadge(g){
+  if (g.source === 'steam') return `<img class="ctile-platform-badge" src="steam-icon.png" alt="Steam" title="Steam">`;
+  if (g.source === 'psn') return `<img class="ctile-platform-badge" src="psn-icon.png" alt="PSN" title="PlayStation">`;
+  if (g.platform) return `<span class="ctile-platform-badge platform-text-badge" title="${escapeHtml(g.platform)}">${escapeHtml(g.platform)}</span>`;
+  return '';
+}
+
 function renderCoverGrid(list){
   const grid = document.getElementById('coverGrid');
   grid.innerHTML = list.map(g => {
@@ -1514,6 +1552,7 @@ function renderCoverGrid(list){
     return `<div class="ctile" data-id="${g.id}">
       ${g.cover ? `<img src="${g.cover}" alt="">` : `<div class="ctile-noimg">${escapeHtml(g.title)}</div>`}
       <span class="ctile-status" style="background:${color}dd; color:#fff;">${g.status||'–'}</span>
+      ${platformCornerBadge(g)}
       <div class="ctile-title">${escapeHtml(g.title)}</div>
       <div class="ctile-overlay">
         <div><b>Status:</b> ${g.status||'–'}</div>
@@ -2185,7 +2224,131 @@ document.getElementById('steamImportBtn').addEventListener('click', async () => 
   }
 });
 
+/* ---------- PlayStation-Zugang (npsso) ---------- */
+let psnNpsso = null;
+async function loadPsnNpsso(){
+  try{
+    const res = await window.storage.get('psn_npsso', false);
+    psnNpsso = res && res.value ? res.value : null;
+  }catch(e){
+    psnNpsso = null;
+  }
+  const statusEl = document.getElementById('psnNpssoStatus');
+  if (statusEl) statusEl.textContent = psnNpsso ? '✓ Zugangscode hinterlegt.' : 'Noch kein Zugangscode hinterlegt.';
+  return psnNpsso;
+}
+document.getElementById('psnNpssoSaveBtn').addEventListener('click', async () => {
+  const val = document.getElementById('psnNpssoInput').value.trim();
+  if (!val){ showToast('Bitte erst einen Code einfügen.', 'warn'); return; }
+  try{
+    await window.storage.set('psn_npsso', val, false);
+    psnNpsso = val;
+    document.getElementById('psnNpssoInput').value = '';
+    document.getElementById('psnNpssoStatus').textContent = '✓ Zugangscode gespeichert.';
+    showToast('✓ PlayStation-Zugangscode gespeichert.', 'success');
+  }catch(err){
+    showToast('❌ Speichern fehlgeschlagen: ' + err.message, 'error');
+  }
+});
+loadPsnNpsso();
+
+document.getElementById('psnImportBtn').addEventListener('click', async () => {
+  if (!psnNpsso) await loadPsnNpsso();
+  if (!psnNpsso){
+    showToast('⚠️ Erst einen PlayStation-Zugangscode im Menü unter "PlayStation-Zugang" eintragen.', 'warn', 5000);
+    openDrawer();
+    return;
+  }
+  const ok = await showConfirm('Deine PlayStation-Bibliothek importieren? Spiele, die schon in deiner Liste stehen, werden nicht doppelt angelegt, aber markiert.');
+  if (!ok) return;
+  const btn = document.getElementById('psnImportBtn');
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Lade PlayStation-Bibliothek...';
+  try{
+    const res = await proxyFetch(`${IGDB_PROXY_URL}?action=psn`, { 'X-PSN-NPSSO': psnNpsso });
+    if (!res.ok){
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || ('HTTP ' + res.status));
+    }
+    const data = await res.json();
+    const psnGames = data.results || [];
+    const byTitle = new Map(games.map(g => [g.title.toLowerCase(), g]));
+    let added = 0, marked = 0;
+    psnGames.forEach(pg => {
+      const existing = byTitle.get(pg.name.toLowerCase());
+      if (existing){
+        if (existing.source !== 'psn'){
+          existing.source = 'psn';
+          if (!existing.cover) existing.cover = pg.background_image;
+          marked++;
+        }
+        return;
+      }
+      games.push({
+        id: uid(),
+        addedAt: new Date().toISOString().slice(0,10),
+        title: pg.name,
+        status: 'Noch zocken',
+        priority: '',
+        acquire: 'Gekauft',
+        price: '',
+        wishprice: '',
+        verdict: '',
+        finished: '',
+        duration: pg.playtime_hours > 0 ? pg.playtime_hours : '',
+        lang: '',
+        releasedate: '',
+        notes: pg.playtime_hours > 0 ? `Von PlayStation importiert (${pg.playtime_hours} Std. gespielt)` : 'Von PlayStation importiert',
+        cover: pg.background_image,
+        genre: '',
+        platform: detectVrFromTitle(pg.name) ? 'PlayStation VR2' : (pg.platform || 'PS5'),
+        source: 'psn',
+      });
+      byTitle.set(pg.name.toLowerCase(), games[games.length-1]);
+      added++;
+    });
+    render();
+    await saveGames();
+    showToast(`✅ PlayStation-Import fertig: <b>${added}</b> neue Spiele, <b>${marked}</b> markiert.`, 'success', 5000);
+  }catch(err){
+    showToast('❌ PlayStation-Import fehlgeschlagen: ' + err.message, 'error', 6000);
+  }finally{
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+  }
+});
+
 /* ---------- Sales Tracker ---------- */
+async function loadItadPrices(){
+  const elements = document.querySelectorAll('.itad-price');
+  for (const el of elements){
+    const title = el.dataset.title;
+    const wishprice = parseFloat(el.dataset.wishprice) || null;
+    try{
+      const res = await proxyFetch(`${IGDB_PROXY_URL}?action=itad&title=${encodeURIComponent(title)}`);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if (!data.found || !data.current){
+        el.innerHTML = '<span class="muted" style="font-size:11px;">Kein Preis gefunden</span>';
+        continue;
+      }
+      const price = data.current.price;
+      const hitWish = wishprice !== null && price <= wishprice;
+      el.innerHTML = `
+        <span style="font-weight:600; color:${hitWish ? 'var(--green)' : 'var(--gold)'};">${price.toFixed(2)} €</span>
+        <span class="muted" style="font-size:11px;"> bei ${escapeHtml(data.current.shop)}${data.current.cut > 0 ? ` (-${data.current.cut}%)` : ''}</span>
+        ${data.historyLow ? `<span class="muted" style="font-size:11px;"> · Tiefstpreis: ${data.historyLow.price.toFixed(2)} €</span>` : ''}
+        ${hitWish ? '<span style="color:var(--green); font-size:11px;"> 🎯 Wunschpreis erreicht!</span>' : ''}
+        <a href="${data.url}" target="_blank" rel="noopener" style="font-size:11px; margin-left:4px;">ITAD ↗</a>
+      `;
+    }catch(err){
+      el.innerHTML = '<span class="muted" style="font-size:11px;">Preis nicht verfügbar</span>';
+    }
+    await sleep(150);
+  }
+}
+
 function renderSales(){
   const watched = games.filter(g => g.pricewatch);
   const list = document.getElementById('salesList');
@@ -2198,6 +2361,7 @@ function renderSales(){
     return `<div class="watch-row">
       <span class="watch-title">${escapeHtml(g.title)}</span>
       ${g.wishprice ? `<span class="muted">Wunschpreis: ${parseFloat(g.wishprice).toFixed(2)} €</span>` : ''}
+      <span class="itad-price" data-title="${escapeHtml(g.title)}" data-wishprice="${g.wishprice || ''}"><span class="muted" style="font-size:11px;">Lade Preis...</span></span>
       <div class="watch-links">
         <button class="copy-title-btn" type="button" data-title="${escapeHtml(g.title)}" title="Titel kopieren, dann bei Keyforsteam einfügen">📋 Titel kopieren</button>
         <a href="https://www.keyforsteam.de/" target="_blank" rel="noopener">Keyforsteam</a>
@@ -2208,6 +2372,7 @@ function renderSales(){
       </div>
     </div>`;
   }).join('');
+  loadItadPrices();
 
   list.querySelectorAll('.copy-title-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -2652,9 +2817,9 @@ const DEFAULT_RAWG_KEY = 'e58aa9b7b165409da17d9ccfae178d9c'; // aus Marvins vorh
 const IGDB_PROXY_URL = 'https://zockerliste-igdb-proxyc.siso-gaming.workers.dev/';
 
 // Schickt bei Anfragen an unseren Worker automatisch das Login-Token mit (Worker verlangt jetzt eine gültige Anmeldung)
-function proxyFetch(url){
+function proxyFetch(url, extraHeaders){
   if (url.startsWith(IGDB_PROXY_URL)){
-    return fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    return fetch(url, { headers: { Authorization: `Bearer ${accessToken}`, ...(extraHeaders || {}) } });
   }
   return fetch(url);
 }
