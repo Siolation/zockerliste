@@ -226,11 +226,17 @@
     font-size:11.5px; font-family:'JetBrains Mono',monospace; font-weight:600; color:var(--royal-hi);
     white-space:nowrap;
   }
+  .cal-item-wrap{display:flex; flex-direction:column;}
   .cal-trailer{
-    color:var(--royal-hi); text-decoration:none; font-size:12.5px; font-weight:600;
+    color:var(--royal-hi); background:none; text-decoration:none; font-size:12.5px; font-weight:600;
     border:1px solid var(--royal-dim); padding:5px 11px; border-radius:6px; white-space:nowrap;
+    cursor:pointer; font-family:'Inter',sans-serif;
   }
   .cal-trailer:hover{background:var(--royal-dim);}
+  .cal-trailer-embed{
+    margin-top:10px; border-radius:10px; overflow:hidden; background:#000;
+    aspect-ratio:16/9; max-width:640px;
+  }
   .cal-sales-btn{
     background:none; border:1px solid var(--line); color:var(--gold);
     padding:5px 9px; border-radius:6px; font-size:13px; cursor:pointer;
@@ -336,7 +342,14 @@
   .watch-row{
     background:var(--bg-elev); border:1px solid var(--line); border-radius:10px;
     padding:12px 16px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:10px;
+    position:relative;
   }
+  .watch-remove-btn{
+    background:none; border:none; color:var(--text-faint); font-size:14px; cursor:pointer;
+    padding:2px 6px; border-radius:5px; opacity:0; transition:opacity .15s ease;
+  }
+  .watch-row:hover .watch-remove-btn{opacity:0.7;}
+  .watch-remove-btn:hover{opacity:1 !important; color:var(--red); background:#e8556b15;}
   .panel-close-row{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;}
   .panel-close-btn{
     background:var(--bg-elev2); border:1px solid var(--line); color:var(--text-muted);
@@ -383,6 +396,9 @@
   .dusty-flag{color:var(--gold); font-size:11px; margin-left:6px;}
   .preorder-flag{font-size:11px; margin-left:6px;}
   .verdict-pill{padding:2px 8px; border-radius:6px; font-size:12.5px; font-weight:600;}
+  .row-select{opacity:0; transition:opacity .15s ease; cursor:pointer;}
+  tr:hover .row-select, .row-select:checked, #selectAllCheckbox{opacity:1;}
+  #selectAllCheckbox{cursor:pointer;}
   .bulk-action-bar{
     display:flex; align-items:center; gap:10px; flex-wrap:wrap;
     background:var(--royal-dim); border:1px solid var(--royal); border-radius:10px;
@@ -443,6 +459,7 @@
     .brand h1{font-size:30px;}
     .tabs{overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch;}
     .tab-btn{flex-shrink:0;}
+    .watch-remove-btn{opacity:0.5;}
     .db-grid{grid-template-columns:repeat(2,1fr);}
   }
   @media (min-width: 721px){
@@ -452,6 +469,12 @@
   /* View switcher */
   .view-switch{display:flex; gap:4px; margin-left:auto; align-self:center;}
   .ctile-size-control{display:flex; align-items:center; gap:6px; margin-left:12px;}
+  .grid-sort-control{display:flex; align-items:center; gap:6px; margin-left:12px;}
+  .grid-sort-control select{
+    background:var(--bg-elev); border:1px solid var(--line); color:var(--text);
+    padding:7px 10px; border-radius:7px; font-size:12.5px;
+  }
+  .grid-sort-control button{padding:7px 10px; font-size:13px;}
   .ctile-size-control input[type=range]{
     width:100px; accent-color:var(--royal-hi); cursor:pointer;
   }
@@ -570,7 +593,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-22-psnlogo-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-23-importfix-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
@@ -666,6 +689,18 @@
         <input type="range" id="ctileSizeSlider" min="100" max="280" step="10" value="160">
         <span style="font-size:17px;">🔍</span>
       </div>
+      <div class="grid-sort-control" id="gridSortControl" style="display:none;">
+        <select id="gridSortSelect">
+          <option value="title">Titel</option>
+          <option value="status">Status</option>
+          <option value="priority">Priorität</option>
+          <option value="price">Preis</option>
+          <option value="duration">Dauer</option>
+          <option value="verdict">Fazit</option>
+          <option value="finished">Durchgezockt am</option>
+        </select>
+        <button class="btn btn-ghost" id="gridSortDirBtn" type="button" title="Reihenfolge umkehren">▲</button>
+      </div>
     </div>
     <div id="syncProgress" class="tab-hint" style="display:none;"></div>
     <div id="dupCheckPanel" class="table-card" style="display:none; padding:18px 20px; margin-bottom:20px;"></div>
@@ -742,19 +777,40 @@
     <div class="filters">
       <input type="text" id="vrSearchInput" placeholder="Titel suchen...">
       <select id="vrStatusFilter"><option value="">Alle Status</option></select>
+      <div class="view-switch">
+        <button class="view-btn active" id="vrViewListBtn" type="button" title="Listenansicht">📋</button>
+        <button class="view-btn" id="vrViewGridBtn" type="button" title="Cover-Ansicht">▦</button>
+      </div>
+      <div class="ctile-size-control" id="vrCtileSizeControl" style="display:none;">
+        <span style="font-size:14px;">🔍</span>
+        <input type="range" id="vrCtileSizeSlider" min="100" max="280" step="10" value="160">
+        <span style="font-size:17px;">🔍</span>
+      </div>
+      <div class="grid-sort-control" id="vrGridSortControl" style="display:none;">
+        <select id="vrGridSortSelect">
+          <option value="title">Titel</option>
+          <option value="status">Status</option>
+          <option value="platform">Plattform</option>
+          <option value="price">Preis</option>
+          <option value="duration">Dauer</option>
+          <option value="verdict">Fazit</option>
+          <option value="finished">Durchgezockt am</option>
+        </select>
+        <button class="btn btn-ghost" id="vrGridSortDirBtn" type="button" title="Reihenfolge umkehren">▲</button>
+      </div>
     </div>
-    <div class="table-card table-desktop">
+    <div class="table-card table-desktop" id="vrListViewDesktop">
       <table>
         <thead>
           <tr>
             <th></th>
-            <th>Titel</th>
-            <th>Status</th>
-            <th>Plattform</th>
-            <th>Preis</th>
-            <th>Dauer</th>
-            <th>Fazit</th>
-            <th>Durchgezockt</th>
+            <th data-sort="title">Titel <span class="sort-arrow" data-col="title"></span></th>
+            <th data-sort="status">Status <span class="sort-arrow" data-col="status"></span></th>
+            <th data-sort="platform">Plattform <span class="sort-arrow" data-col="platform"></span></th>
+            <th data-sort="price">Preis <span class="sort-arrow" data-col="price"></span></th>
+            <th data-sort="duration">Dauer <span class="sort-arrow" data-col="duration"></span></th>
+            <th data-sort="verdict">Fazit <span class="sort-arrow" data-col="verdict"></span></th>
+            <th data-sort="finished">Durchgezockt <span class="sort-arrow" data-col="finished"></span></th>
           </tr>
         </thead>
         <tbody id="vrTableBody"></tbody>
@@ -764,6 +820,7 @@
         <p>Wähl im Bearbeiten-Dialog eine VR-Plattform (Meta Quest, PlayStation VR2), dann taucht das Spiel hier auf.</p>
       </div>
     </div>
+    <div class="cover-grid" id="vrCoverGrid" style="display:none;"></div>
     <div class="mobile-cards" id="vrMobileCards"></div>
   </div>
 
@@ -1544,8 +1601,8 @@ function platformCornerBadge(g){
   return '';
 }
 
-function renderCoverGrid(list){
-  const grid = document.getElementById('coverGrid');
+function renderCoverGrid(list, gridId){
+  const grid = document.getElementById(gridId || 'coverGrid');
   grid.innerHTML = list.map(g => {
     const color = STATUS_COLORS[g.status] || '#565f78';
     const prio = (g.status === 'Noch zocken' && g.priority) ? g.priority.replace(/^[0-9]+\.\s*/,'') : null;
@@ -1574,6 +1631,9 @@ function renderCoverGrid(list){
 }
 
 /* ---------- VR-Register ---------- */
+let vrSort = { col: 'title', dir: 'asc' };
+let vrCurrentView = localStorage.getItem('zl_vr_view') || 'list';
+
 function renderVrTab(){
   const search = document.getElementById('vrSearchInput').value.toLowerCase();
   const statusVal = document.getElementById('vrStatusFilter').value;
@@ -1589,7 +1649,17 @@ function renderVrTab(){
     if (statusVal && g.status !== statusVal) return false;
     return true;
   });
-  list.sort((a,b) => a.title.localeCompare(b.title));
+
+  const { col, dir } = vrSort;
+  const mult = dir === 'asc' ? 1 : -1;
+  list.sort((a,b) => {
+    let va = a[col] ?? '', vb = b[col] ?? '';
+    if (col === 'price' || col === 'duration'){ va = parseFloat(a[col])||0; vb = parseFloat(b[col])||0; return (va-vb)*mult; }
+    return String(va).localeCompare(String(vb)) * mult;
+  });
+  document.querySelectorAll('#tab-vr .sort-arrow').forEach(el => {
+    el.textContent = el.dataset.col === col ? (dir === 'asc' ? '▲' : '▼') : '';
+  });
 
   const tbody = document.getElementById('vrTableBody');
   const emptyState = document.getElementById('vrEmptyState');
@@ -1598,6 +1668,7 @@ function renderVrTab(){
   if (list.length === 0){
     tbody.innerHTML = '';
     mobileCards.innerHTML = '';
+    document.getElementById('vrCoverGrid').innerHTML = '';
     emptyState.style.display = 'block';
     return;
   }
@@ -1607,12 +1678,12 @@ function renderVrTab(){
     const color = STATUS_COLORS[g.status] || '#565f78';
     return `<tr data-id="${g.id}">
       <td class="row-cover-cell">${g.cover ? `<img class="row-cover" src="${g.cover}" alt="">` : ''}</td>
-      <td class="title-cell">${escapeHtml(g.title)}</td>
+      <td class="title-cell">${escapeHtml(g.title)}${platformCornerBadge(g)}</td>
       <td><span class="status-pill" style="background:${color}22; color:${color}; border:1px solid ${color}55;">${g.status||'–'}</span></td>
       <td class="muted">${escapeHtml(g.platform||'–')}</td>
       <td>${g.price ? parseFloat(g.price).toFixed(2)+' €' : '<span class="muted">–</span>'}</td>
       <td>${g.duration ? parseFloat(g.duration).toFixed(0)+' Std.' : '<span class="muted">–</span>'}</td>
-      <td>${g.verdict || '<span class="muted">–</span>'}</td>
+      <td>${g.verdict ? `<span class="verdict-pill" style="background:${getVerdictColor(g.verdict)}22; color:${getVerdictColor(g.verdict)};">${escapeHtml(g.verdict)}</span>` : '<span class="muted">–</span>'}</td>
       <td>${g.finished || '<span class="muted">–</span>'}</td>
     </tr>`;
   }).join('');
@@ -1632,16 +1703,65 @@ function renderVrTab(){
         <span>${escapeHtml(g.platform||'–')}</span>
         ${g.price ? `<span><b>${parseFloat(g.price).toFixed(2)} €</b></span>` : ''}
         ${g.duration ? `<span><b>${parseFloat(g.duration).toFixed(0)} Std.</b></span>` : ''}
-        ${g.verdict ? `<span>Fazit: <b>${escapeHtml(g.verdict)}</b></span>` : ''}
+        ${g.verdict ? `<span>Fazit: <b style="color:${getVerdictColor(g.verdict)};">${escapeHtml(g.verdict)}</b></span>` : ''}
       </div>
     </div>`;
   }).join('');
   mobileCards.querySelectorAll('.mcard').forEach(card => {
     card.addEventListener('click', () => openEdit(card.dataset.id));
   });
+
+  renderCoverGrid(list, 'vrCoverGrid');
 }
 document.getElementById('vrSearchInput').addEventListener('input', renderVrTab);
 document.getElementById('vrStatusFilter').addEventListener('change', renderVrTab);
+document.querySelectorAll('#tab-vr [data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.sort;
+    if (vrSort.col === col) vrSort.dir = vrSort.dir === 'asc' ? 'desc' : 'asc';
+    else vrSort = { col, dir: 'asc' };
+    renderVrTab();
+  });
+});
+
+function applyVrView(){
+  const isGrid = vrCurrentView === 'grid';
+  document.getElementById('vrViewListBtn').classList.toggle('active', !isGrid);
+  document.getElementById('vrViewGridBtn').classList.toggle('active', isGrid);
+  document.getElementById('vrCoverGrid').style.display = isGrid ? 'grid' : 'none';
+  document.getElementById('vrListViewDesktop').style.display = isGrid ? 'none' : '';
+  document.getElementById('vrMobileCards').style.display = isGrid ? 'none' : '';
+  document.getElementById('vrCtileSizeControl').style.display = isGrid ? 'flex' : 'none';
+  document.getElementById('vrGridSortControl').style.display = isGrid ? 'flex' : 'none';
+  if (isGrid){
+    document.getElementById('vrGridSortSelect').value = vrSort.col;
+    document.getElementById('vrGridSortDirBtn').textContent = vrSort.dir === 'asc' ? '▲' : '▼';
+  }
+}
+document.getElementById('vrGridSortSelect').addEventListener('change', (e) => {
+  vrSort.col = e.target.value;
+  renderVrTab();
+});
+document.getElementById('vrGridSortDirBtn').addEventListener('click', () => {
+  vrSort.dir = vrSort.dir === 'asc' ? 'desc' : 'asc';
+  document.getElementById('vrGridSortDirBtn').textContent = vrSort.dir === 'asc' ? '▲' : '▼';
+  renderVrTab();
+});
+document.getElementById('vrViewListBtn').addEventListener('click', () => {
+  vrCurrentView = 'list'; localStorage.setItem('zl_vr_view', vrCurrentView); applyVrView();
+});
+document.getElementById('vrViewGridBtn').addEventListener('click', () => {
+  vrCurrentView = 'grid'; localStorage.setItem('zl_vr_view', vrCurrentView); applyVrView();
+});
+applyVrView();
+const savedVrCtileSize = localStorage.getItem('zl_vr_ctile_size') || '160';
+document.getElementById('vrCtileSizeSlider').value = savedVrCtileSize;
+document.getElementById('vrCoverGrid').style.setProperty('--ctile-size', savedVrCtileSize + 'px');
+document.getElementById('vrCtileSizeSlider').addEventListener('input', (e) => {
+  const val = e.target.value;
+  document.getElementById('vrCoverGrid').style.setProperty('--ctile-size', val + 'px');
+  localStorage.setItem('zl_vr_ctile_size', val);
+});
 
 /* ---------- Moderne Benachrichtigungen (statt Browser-alert/confirm) ---------- */
 function showToast(message, type='info', duration=3500){
@@ -2015,7 +2135,21 @@ function applyView(){
   document.getElementById('listViewDesktop').style.display = isGrid ? 'none' : '';
   document.getElementById('mobileCards').style.display = isGrid ? 'none' : '';
   document.getElementById('ctileSizeControl').style.display = isGrid ? 'flex' : 'none';
+  document.getElementById('gridSortControl').style.display = isGrid ? 'flex' : 'none';
+  if (isGrid){
+    document.getElementById('gridSortSelect').value = currentSort.col;
+    document.getElementById('gridSortDirBtn').textContent = currentSort.dir === 'asc' ? '▲' : '▼';
+  }
 }
+document.getElementById('gridSortSelect').addEventListener('change', (e) => {
+  currentSort.col = e.target.value;
+  renderTable();
+});
+document.getElementById('gridSortDirBtn').addEventListener('click', () => {
+  currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+  document.getElementById('gridSortDirBtn').textContent = currentSort.dir === 'asc' ? '▲' : '▼';
+  renderTable();
+});
 document.getElementById('viewListBtn').addEventListener('click', () => {
   currentView = 'list'; localStorage.setItem('zl_view', currentView); applyView();
 });
@@ -2178,13 +2312,15 @@ document.getElementById('steamImportBtn').addEventListener('click', async () => 
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     const steamGames = data.results || [];
-    const byTitle = new Map(games.map(g => [g.title.toLowerCase(), g]));
+    const byAppId = new Map(games.filter(g => g.steamAppId).map(g => [g.steamAppId, g]));
+    const byNormTitle = new Map(games.map(g => [normalizeTitle(g.title), g]));
     let added = 0, marked = 0;
     steamGames.forEach(sg => {
-      const existing = byTitle.get(sg.name.toLowerCase());
+      const existing = byAppId.get(sg.appid) || byNormTitle.get(normalizeTitle(sg.name));
       if (existing){
-        if (existing.source !== 'steam'){
+        if (existing.source !== 'steam' || !existing.steamAppId){
           existing.source = 'steam';
+          existing.steamAppId = sg.appid;
           if (!existing.cover) existing.cover = sg.background_image;
           marked++;
         }
@@ -2209,8 +2345,10 @@ document.getElementById('steamImportBtn').addEventListener('click', async () => 
         genre: '',
         platform: detectVrFromTitle(sg.name) ? 'Sonstige VR' : 'PC',
         source: 'steam',
+        steamAppId: sg.appid,
       });
-      byTitle.set(sg.name.toLowerCase(), games[games.length-1]);
+      byAppId.set(sg.appid, games[games.length-1]);
+      byNormTitle.set(normalizeTitle(sg.name), games[games.length-1]);
       added++;
     });
     render();
@@ -2273,13 +2411,15 @@ document.getElementById('psnImportBtn').addEventListener('click', async () => {
     }
     const data = await res.json();
     const psnGames = data.results || [];
-    const byTitle = new Map(games.map(g => [g.title.toLowerCase(), g]));
+    const byTitleId = new Map(games.filter(g => g.psnTitleId).map(g => [g.psnTitleId, g]));
+    const byNormTitle = new Map(games.map(g => [normalizeTitle(g.title), g]));
     let added = 0, marked = 0;
     psnGames.forEach(pg => {
-      const existing = byTitle.get(pg.name.toLowerCase());
+      const existing = byTitleId.get(pg.titleId) || byNormTitle.get(normalizeTitle(pg.name));
       if (existing){
-        if (existing.source !== 'psn'){
+        if (existing.source !== 'psn' || !existing.psnTitleId){
           existing.source = 'psn';
+          existing.psnTitleId = pg.titleId;
           if (!existing.cover) existing.cover = pg.background_image;
           marked++;
         }
@@ -2304,8 +2444,10 @@ document.getElementById('psnImportBtn').addEventListener('click', async () => {
         genre: '',
         platform: detectVrFromTitle(pg.name) ? 'PlayStation VR2' : (pg.platform || 'PS5'),
         source: 'psn',
+        psnTitleId: pg.titleId,
       });
-      byTitle.set(pg.name.toLowerCase(), games[games.length-1]);
+      byTitleId.set(pg.titleId, games[games.length-1]);
+      byNormTitle.set(normalizeTitle(pg.name), games[games.length-1]);
       added++;
     });
     render();
@@ -2359,6 +2501,7 @@ function renderSales(){
   list.innerHTML = watched.map(g => {
     const q = encodeURIComponent(g.title);
     return `<div class="watch-row">
+      <button class="watch-remove-btn" type="button" data-id="${g.id}" title="Aus Preisbeobachtung entfernen">✕</button>
       <span class="watch-title">${escapeHtml(g.title)}</span>
       ${g.wishprice ? `<span class="muted">Wunschpreis: ${parseFloat(g.wishprice).toFixed(2)} €</span>` : ''}
       <span class="itad-price" data-title="${escapeHtml(g.title)}" data-wishprice="${g.wishprice || ''}"><span class="muted" style="font-size:11px;">Lade Preis...</span></span>
@@ -2373,6 +2516,17 @@ function renderSales(){
     </div>`;
   }).join('');
   loadItadPrices();
+
+  list.querySelectorAll('.watch-remove-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const g = games.find(x => x.id === btn.dataset.id);
+      if (!g) return;
+      g.pricewatch = false;
+      renderSales();
+      await saveGames();
+      showToast(`✕ "${escapeHtml(g.title)}" nicht mehr beobachtet.`, 'success', 2500);
+    });
+  });
 
   list.querySelectorAll('.copy-title-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -2777,24 +2931,30 @@ function renderKalender(){
   calList.innerHTML = filtered.map(g => {
     const upcoming = g.releasedate > today;
     const dateFmt = new Date(g.releasedate).toLocaleDateString('de-DE', {day:'2-digit', month:'short', year:'numeric'});
-    const trailerUrl = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(g.title + ' trailer');
     let countdown = '';
     if (upcoming){
       const days = Math.ceil((new Date(g.releasedate) - new Date(today)) / 86400000);
       countdown = `<span class="cal-countdown">${days === 0 ? 'heute' : days === 1 ? 'noch 1 Tag' : 'noch ' + days + ' Tage'}</span>`;
     }
-    return `<div class="cal-item">
-      ${g.cover ? `<img class="cal-cover" src="${g.cover}" alt="">` : ''}
-      <span class="cal-date">${dateFmt}</span>
-      <span class="cal-title">${escapeHtml(g.title)}</span>
-      ${countdown}
-      <span class="cal-badge ${upcoming ? 'upcoming' : 'released'}">${upcoming ? 'Kommt noch' : 'Erschienen'}</span>
-      ${g.preordered ? `<span class="cal-badge" style="background:#3355ee22; color:var(--royal-hi); border:1px solid #3355ee55;">🎟️ Vorbestellt</span>` : ''}
-      ${g.price ? `<span class="muted">${parseFloat(g.price).toFixed(2)} €</span>` : ''}
-      <button class="cal-sales-btn" type="button" data-id="${g.id}" title="Preis beobachten & zum Sales Tracker">💰</button>
-      <a class="cal-trailer" href="${trailerUrl}" target="_blank" rel="noopener">▶ Trailer</a>
+    return `<div class="cal-item-wrap" data-title="${escapeHtml(g.title)}">
+      <div class="cal-item">
+        ${g.cover ? `<img class="cal-cover" src="${g.cover}" alt="">` : ''}
+        <span class="cal-date">${dateFmt}</span>
+        <span class="cal-title">${escapeHtml(g.title)}</span>
+        ${countdown}
+        <span class="cal-badge ${upcoming ? 'upcoming' : 'released'}">${upcoming ? 'Kommt noch' : 'Erschienen'}</span>
+        ${g.preordered ? `<span class="cal-badge" style="background:#3355ee22; color:var(--royal-hi); border:1px solid #3355ee55;">🎟️ Vorbestellt</span>` : ''}
+        ${g.price ? `<span class="muted">${parseFloat(g.price).toFixed(2)} €</span>` : ''}
+        <button class="cal-sales-btn" type="button" data-id="${g.id}" title="Preis beobachten & zum Sales Tracker">💰</button>
+        <button class="cal-trailer" type="button" data-title="${escapeHtml(g.title)}">▶ Trailer</button>
+      </div>
+      <div class="cal-trailer-embed" style="display:none;"></div>
     </div>`;
   }).join('');
+
+  calList.querySelectorAll('.cal-trailer').forEach(btn => {
+    btn.addEventListener('click', () => toggleTrailerEmbed(btn));
+  });
 
   calList.querySelectorAll('.cal-sales-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -2809,6 +2969,36 @@ function renderKalender(){
       document.querySelector('.tab-btn[data-tab="sales"]').click();
     });
   });
+}
+
+/* ---------- Eingebettete Trailer-Vorschau (über YouTube Data API) ---------- */
+async function toggleTrailerEmbed(btn){
+  const wrap = btn.closest('.cal-item-wrap');
+  const embedEl = wrap.querySelector('.cal-trailer-embed');
+  if (embedEl.style.display !== 'none'){
+    embedEl.style.display = 'none';
+    embedEl.innerHTML = '';
+    btn.textContent = '▶ Trailer';
+    return;
+  }
+  btn.textContent = '⏳ Lade...';
+  embedEl.style.display = 'block';
+  embedEl.innerHTML = '<p class="muted" style="padding:10px;">Suche Trailer...</p>';
+  try{
+    const res = await proxyFetch(`${IGDB_PROXY_URL}?action=youtube&q=${encodeURIComponent(btn.dataset.title + ' trailer')}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.found){
+      embedEl.innerHTML = '<p class="muted" style="padding:10px;">Kein Trailer gefunden.</p>';
+      btn.textContent = '▶ Trailer';
+      return;
+    }
+    embedEl.innerHTML = `<iframe width="100%" height="100%" src="https://www.youtube-nocookie.com/embed/${data.videoId}?autoplay=1" title="Trailer" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+    btn.textContent = '✕ Trailer schließen';
+  }catch(err){
+    embedEl.innerHTML = `<p style="color:var(--red); padding:10px;">Trailer konnte nicht geladen werden: ${err.message}</p>`;
+    btn.textContent = '▶ Trailer';
+  }
 }
 
 /* ---------- RAWG database browser ---------- */
