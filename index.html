@@ -500,6 +500,11 @@
     position:relative; border-radius:10px; overflow:hidden; aspect-ratio:3/4; cursor:pointer;
     background:var(--bg-elev); border:1px solid var(--line);
   }
+  .ctile-select{
+    position:absolute; top:6px; left:6px; z-index:3; opacity:0; transition:opacity .15s ease;
+    width:16px; height:16px; cursor:pointer;
+  }
+  .ctile:hover .ctile-select, .ctile-select:checked{opacity:1;}
   .ctile img{width:100%; height:100%; object-fit:cover; display:block;}
   .ctile-noimg{
     width:100%; height:100%; display:flex; align-items:center; justify-content:center;
@@ -626,7 +631,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-23-neverplay-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-23-orderedmerge-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
@@ -770,6 +775,7 @@
         <option>Nie spielen</option>
       </select>
       <button class="btn btn-ghost" id="bulkApplyStatusBtn" type="button">Anwenden</button>
+      <button class="btn btn-ghost" id="bulkMergeBtn" type="button" style="display:none;">🔗 Verschmelzen</button>
       <button class="btn btn-danger" id="bulkDeleteBtn" type="button">🗑️ Löschen</button>
       <button class="btn btn-ghost" id="bulkClearBtn" type="button" style="margin-left:auto;">Auswahl aufheben</button>
     </div>
@@ -1410,6 +1416,7 @@ function updateBulkActionBar(){
   }
   bar.style.display = 'flex';
   document.getElementById('bulkSelectedCount').textContent = selectedIds.size + ' ausgewählt';
+  document.getElementById('bulkMergeBtn').style.display = selectedIds.size === 2 ? 'inline-block' : 'none';
 }
 
 document.getElementById('selectAllCheckbox').addEventListener('change', (e) => {
@@ -1449,6 +1456,14 @@ document.getElementById('bulkDeleteBtn').addEventListener('click', async () => {
   await saveGames();
   showToast('🗑️ Spiele gelöscht.', 'warn');
   refreshDupPanelIfOpen();
+});
+
+document.getElementById('bulkMergeBtn').addEventListener('click', async () => {
+  if (selectedIds.size !== 2) return;
+  const [firstChecked, secondChecked] = [...selectedIds];
+  await handleOrderedMergeClick(firstChecked, secondChecked);
+  selectedIds.clear();
+  updateBulkActionBar();
 });
 
 const VR_PLATFORMS = ['Meta Quest', 'PlayStation VR2', 'Sonstige VR'];
@@ -1714,11 +1729,14 @@ function platformCornerBadge(g){
 }
 
 function renderCoverGrid(list, gridId){
-  const grid = document.getElementById(gridId || 'coverGrid');
+  const id = gridId || 'coverGrid';
+  const grid = document.getElementById(id);
+  const withSelection = id === 'coverGrid';
   grid.innerHTML = list.map(g => {
     const color = STATUS_COLORS[g.status] || '#565f78';
     const prio = (g.status === 'Noch zocken' && g.priority) ? g.priority.replace(/^[0-9]+\.\s*/,'') : null;
     return `<div class="ctile" data-id="${g.id}">
+      ${withSelection ? `<input type="checkbox" class="ctile-select row-select" data-id="${g.id}" ${selectedIds.has(g.id)?'checked':''}>` : ''}
       ${g.cover ? `<img src="${g.cover}" alt="">` : `<div class="ctile-noimg">${escapeHtml(g.title)}</div>`}
       <span class="ctile-status" style="background:${color}dd; color:#fff;">${g.status||'–'}</span>
       ${platformCornerBadge(g)}
@@ -1735,10 +1753,21 @@ function renderCoverGrid(list, gridId){
     </div>`;
   }).join('');
   grid.querySelectorAll('.ctile').forEach(tile => {
-    tile.addEventListener('click', () => openEdit(tile.dataset.id));
+    tile.addEventListener('click', (e) => {
+      if (e.target.classList.contains('ctile-select')) return;
+      openEdit(tile.dataset.id);
+    });
   });
   grid.querySelectorAll('.ctile-hltb').forEach(link => {
     link.addEventListener('click', (e) => e.stopPropagation());
+  });
+  grid.querySelectorAll('.ctile-select').forEach(cb => {
+    cb.addEventListener('click', (e) => e.stopPropagation());
+    cb.addEventListener('change', (e) => {
+      if (e.target.checked) selectedIds.add(e.target.dataset.id);
+      else selectedIds.delete(e.target.dataset.id);
+      updateBulkActionBar();
+    });
   });
 }
 
@@ -2879,6 +2908,44 @@ const STATUS_PROGRESS_RANK = {
   'Durchgezockt': 5, 'Am zocken': 4, 'Noch zocken': 3, 'Pausiert': 2,
   'Kommt noch': 1, 'Abgebrochen': 1, 'Langweilig': 1,
 };
+
+// Reihenfolge-basiertes Verschmelzen für die manuelle Auswahl (Häkchen 1 = Basis/bleibt, Häkchen 2 = füllt Lücken)
+// Anders als mergeGamePair (automatischer Duplikat-Check, Status-basiert) - hier entscheidet allein die Anklick-Reihenfolge
+function mergeGamePairOrdered(primary, other){
+  const merged = { ...primary };
+  const gapFields = ['price','wishprice','verdict','finished','duration','lang','releasedate','priority','acquire','genre','cover'];
+  gapFields.forEach(f => {
+    const val = merged[f];
+    if (val === '' || val === undefined || val === null){
+      if (other[f] !== '' && other[f] !== undefined && other[f] !== null) merged[f] = other[f];
+    }
+  });
+  // Status: übernehmen, falls die Basis noch den generischen Import-Status hat, der andere Eintrag aber konkreter ist
+  if ((merged.status === 'Noch zocken' || !merged.status) && other.status && other.status !== merged.status){
+    merged.status = other.status;
+  }
+  merged.notes = [merged.notes, other.notes].filter(Boolean).join(' | ');
+  return merged;
+}
+
+async function handleOrderedMergeClick(primaryId, otherId){
+  const primary = games.find(g => g.id === primaryId), other = games.find(g => g.id === otherId);
+  if (!primary || !other) return;
+  const merged = mergeGamePairOrdered(primary, other);
+  const preview = `"${escapeHtml(primary.title)}" bleibt bestehen, fehlende Daten kommen von "${escapeHtml(other.title)}".<br><br>
+    Ergebnis: Status <b>${escapeHtml(merged.status||'–')}</b>, Preis <b>${merged.price || '–'}</b>, Fazit <b>${escapeHtml(merged.verdict||'–')}</b>, Durchgezockt am <b>${merged.finished||'–'}</b>.<br>
+    "${escapeHtml(other.title)}" wird danach gelöscht.`;
+  const ok = await showConfirm(preview);
+  if (!ok) return;
+
+  const idx = games.findIndex(g => g.id === primaryId);
+  games[idx] = { ...merged, id: primaryId };
+  games = games.filter(g => g.id !== otherId);
+  render();
+  await saveGames();
+  showToast('🔗 Spiele erfolgreich zusammengeführt.', 'success');
+  refreshDupPanelIfOpen();
+}
 
 function mergeGamePair(a, b){
   const aDone = a.status === 'Durchgezockt', bDone = b.status === 'Durchgezockt';
