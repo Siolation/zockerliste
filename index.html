@@ -639,7 +639,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-24-criticrating-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-24-fuzzysync-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
@@ -2901,8 +2901,19 @@ async function syncAllWithDatabase(){
       if (res.ok){
         const data = await res.json();
         const results = data.results || [];
-        const exact = results.find(r => r.name.toLowerCase() === g.title.toLowerCase());
-        const match = exact || results[0];
+        // Ähnlichkeits-Abgleich statt strengem Exakt-Vergleich - erkennt z.B. "Assassin's Creed Black Flag" als
+        // "Assassin's Creed IV: Black Flag", ohne bei komplett anderen Spielen zuzuschlagen
+        const normTitle = normalizeTitle(g.title);
+        let match = null, bestSim = 0;
+        results.forEach(r => {
+          const normR = normalizeTitle(r.name);
+          if (isDifferentInstallment(normTitle, normR)) return;
+          const maxLen = Math.max(normTitle.length, normR.length);
+          if (maxLen === 0) return;
+          const sim = normTitle === normR ? 1 : 1 - (levenshtein(normTitle, normR) / maxLen);
+          if (sim > bestSim){ bestSim = sim; match = r; }
+        });
+        if (bestSim < 0.85) match = null;
         if (match){
           if (match.background_image) g.cover = match.background_image;
           if (match.released) g.releasedate = match.released;
