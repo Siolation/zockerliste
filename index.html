@@ -398,6 +398,7 @@
   .confirm-actions{display:flex; gap:10px; justify-content:flex-end;}
 
   .dusty-flag{color:var(--gold); font-size:11px; margin-left:6px;}
+  .critic-badge{font-size:11px; font-weight:700; margin-left:6px;}
   .preorder-flag{font-size:11px; margin-left:6px;}
   .verdict-pill{padding:2px 8px; border-radius:6px; font-size:12.5px; font-weight:600;}
   .row-select{opacity:0; transition:opacity .15s ease; cursor:pointer;}
@@ -638,7 +639,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-24-bigfeatures-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-24-criticrating-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
@@ -1097,9 +1098,11 @@
         <div class="field">
           <label>Dauer (Std.)</label>
           <div style="display:flex; gap:8px;">
-            <input type="number" step="0.1" id="f_duration" style="flex:1;">
-            <button type="button" class="btn btn-ghost" id="timerToggleBtn" style="white-space:nowrap;">▶ Timer</button>
-            <button type="button" class="btn btn-ghost" id="hltbFillBtn" style="white-space:nowrap;" title="Geschätzte Spieldauer von HowLongToBeat übernehmen">⏱ HLTB übernehmen</button>
+            <input type="number" step="0.1" id="f_duration" style="flex:1; min-width:70px;">
+          </div>
+          <div style="display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-ghost" id="timerToggleBtn" style="white-space:nowrap; flex:1;">▶ Timer</button>
+            <button type="button" class="btn btn-ghost" id="hltbFillBtn" style="white-space:nowrap; flex:1;" title="Geschätzte Spieldauer von HowLongToBeat übernehmen">⏱ HLTB übernehmen</button>
           </div>
           <p id="timerDisplay" class="tab-hint" style="margin:4px 0 0; display:none;"></p>
         </div>
@@ -1422,6 +1425,13 @@ function getVerdictColor(verdict){
   if (v <= 2) return '#3ecf8e';
   if (v <= 3.5) return '#e8a33d';
   return '#e8556b';
+}
+
+function criticBadge(g){
+  if (!g.criticRating) return '';
+  const c = g.criticRating;
+  const color = c >= 75 ? 'var(--green)' : c >= 50 ? 'var(--gold)' : 'var(--red)';
+  return `<span class="critic-badge" style="color:${color};" title="Kritiker-Wertung">★ ${c}</span>`;
 }
 
 function updateBulkActionBar(){
@@ -1754,7 +1764,7 @@ function renderTable(){
     return `<tr data-id="${g.id}">
       <td><input type="checkbox" class="row-select" data-id="${g.id}" ${selectedIds.has(g.id)?'checked':''}></td>
       <td class="row-cover-cell">${g.cover ? `<img class="row-cover" src="${g.cover}" alt="">` : ''}</td>
-      <td class="title-cell">${escapeHtml(g.title)}${(g.platform && !(g.source === 'steam' && g.platform === 'PC')) ? `<span class="platform-tag">${escapeHtml(g.platform)}</span>` : ''}${g.source === 'steam' ? `<img class="steam-badge" src="steam-icon.png" title="Von Steam importiert" alt="Steam">` : ''}${g.source === 'psn' ? `<img class="psn-badge" src="psn-icon.png" title="Von PlayStation importiert" alt="PSN">` : ''}${isDusty(g) ? `<span class="dusty-flag" title="Seit über einem Jahr im Backlog ohne Fortschritt">🕸️</span>` : ''}${g.preordered ? `<span class="preorder-flag" title="Vorbestellt">🎟️</span>` : ''}<a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></td>
+      <td class="title-cell">${escapeHtml(g.title)}${(g.platform && !(g.source === 'steam' && g.platform === 'PC')) ? `<span class="platform-tag">${escapeHtml(g.platform)}</span>` : ''}${criticBadge(g)}${g.source === 'steam' ? `<img class="steam-badge" src="steam-icon.png" title="Von Steam importiert" alt="Steam">` : ''}${g.source === 'psn' ? `<img class="psn-badge" src="psn-icon.png" title="Von PlayStation importiert" alt="PSN">` : ''}${isDusty(g) ? `<span class="dusty-flag" title="Seit über einem Jahr im Backlog ohne Fortschritt">🕸️</span>` : ''}${g.preordered ? `<span class="preorder-flag" title="Vorbestellt">🎟️</span>` : ''}<a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></td>
       <td><span class="status-pill" style="background:${color}22; color:${color}; border:1px solid ${color}55;">${g.status||'–'}</span></td>
       <td class="prio-tag">${(g.status === 'Noch zocken' && g.priority) ? g.priority.replace(/^[0-9]+\\.\\s*/,'') : '<span class="muted">–</span>'}</td>
       <td>${g.price ? parseFloat(g.price).toFixed(2)+' €' : '<span class="muted">–</span>'}</td>
@@ -1795,6 +1805,7 @@ function renderTable(){
       <div class="mcard-meta">
         ${g.price ? `<span><b>${parseFloat(g.price).toFixed(2)} €</b></span>` : ''}
         ${g.duration ? `<span><b>${parseFloat(g.duration).toFixed(0)} Std.</b></span>` : ''}
+        ${criticBadge(g) ? `<span>${criticBadge(g)}</span>` : ''}
         ${g.verdict ? `<span>Fazit: <b style="color:${getVerdictColor(g.verdict)};">${escapeHtml(g.verdict)}</b></span>` : ''}
         ${prio ? `<span>Prio: <b>${escapeHtml(prio)}</b></span>` : ''}
         ${g.finished ? `<span>${g.finished}</span>` : ''}
@@ -1842,6 +1853,7 @@ function renderCoverGrid(list, gridId){
         <div><b>Status:</b> ${g.status||'–'}</div>
         ${prio ? `<div><b>Priorität:</b> ${escapeHtml(prio)}</div>` : ''}
         <div><b>Preis:</b> ${g.price ? parseFloat(g.price).toFixed(2)+' €' : '–'}</div>
+        ${g.criticRating ? `<div><b>Wertung:</b> ${criticBadge(g)}</div>` : ''}
         <div><b>Fazit:</b> ${g.verdict || '–'}</div>
         <div><b>Durchgezockt:</b> ${g.finished || '–'}</div>
         <div><b>Sprache:</b> ${g.lang || '–'}</div>
@@ -2193,12 +2205,15 @@ document.getElementById('timerToggleBtn').addEventListener('click', () => {
 document.getElementById('hltbFillBtn').addEventListener('click', async () => {
   const title = document.getElementById('f_title').value.trim();
   if (!title){ showToast('Erst einen Titel eingeben.', 'warn'); return; }
+  const id = document.getElementById('gameId').value;
+  const g = games.find(x => x.id === id);
+  const steamAppId = g && g.steamAppId ? g.steamAppId : '';
   const btn = document.getElementById('hltbFillBtn');
   const orig = btn.textContent;
   btn.disabled = true;
   btn.textContent = '⏳ Suche...';
   try{
-    const res = await proxyFetch(`${IGDB_PROXY_URL}?action=hltb&title=${encodeURIComponent(title)}`);
+    const res = await proxyFetch(`${IGDB_PROXY_URL}?action=hltb&title=${encodeURIComponent(title)}${steamAppId ? '&steamAppId='+steamAppId : ''}`);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     if (!data.found){
@@ -2892,6 +2907,8 @@ async function syncAllWithDatabase(){
           if (match.background_image) g.cover = match.background_image;
           if (match.released) g.releasedate = match.released;
           if (match.genres && match.genres.length && !g.genre) g.genre = match.genres.map(x=>x.name).join(', ');
+          const rating = match.metacritic || match.critic_rating;
+          if (rating) g.criticRating = rating;
           updated++;
         } else {
           notFound++;
@@ -3706,6 +3723,7 @@ async function toggleGameFromDbResult(r, btn){
       cover: r.background_image || '',
       genre: (r.genres || []).map(g => g.name).join(', '),
       platform: detectVrFromTitle(r.name) ? 'Sonstige VR' : '',
+      criticRating: r.metacritic || r.critic_rating || null,
     });
     btn.textContent = '✓ In deiner Liste (entfernen)';
     btn.classList.add('added');
