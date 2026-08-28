@@ -639,7 +639,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-24-fuzzysync-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-25-mclink-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
@@ -931,6 +931,20 @@
         <input type="text" id="similarToInput" placeholder="Ähnlich wie... (Titel eingeben)">
         <button class="btn btn-ghost" id="similarToBtn" type="button">🔎 Ähnliche finden</button>
       </div>
+      <div class="filters" style="margin-top:8px;">
+        <select id="eventQuickSelect">
+          <option value="">🎪 Shows & Events...</option>
+          <option value="gamescom opening night">Gamescom Opening Night Live</option>
+          <option value="the game awards">The Game Awards</option>
+          <option value="state of play">State of Play</option>
+          <option value="nintendo direct">Nintendo Direct</option>
+          <option value="xbox games showcase">Xbox Games Showcase</option>
+          <option value="summer game fest">Summer Game Fest</option>
+        </select>
+        <input type="text" id="eventSearchInput" placeholder="oder eigenen Event-Namen eingeben...">
+        <button class="btn btn-ghost" id="eventSearchBtn" type="button">Suchen</button>
+      </div>
+      <div id="eventResultsList" class="month-chips"></div>
       <p id="rawgError" class="tab-hint" style="color:var(--red);"></p>
       <div class="db-grid" id="dbGrid"></div>
     </div>
@@ -3308,6 +3322,7 @@ function renderKalender(){
         ${g.preordered ? `<span class="cal-badge" style="background:#3355ee22; color:var(--royal-hi); border:1px solid #3355ee55;">🎟️ Vorbestellt</span>` : ''}
         ${g.price ? `<span class="muted">${parseFloat(g.price).toFixed(2)} €</span>` : ''}
         <button class="cal-sales-btn" type="button" data-id="${g.id}" title="Preis beobachten & zum Sales Tracker">💰</button>
+        <a class="cal-trailer" href="https://www.google.com/search?q=site:metacritic.com+${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Metacritic-Wertung nachschauen (falls schon Tests da sind)">Ⓜ️ Metacritic</a>
         <button class="cal-trailer" type="button" data-title="${escapeHtml(g.title)}">▶ Trailer</button>
       </div>
       <div class="cal-trailer-embed" style="display:none;"></div>
@@ -3639,6 +3654,54 @@ document.getElementById('similarToBtn').addEventListener('click', async () => {
 document.getElementById('similarToInput').addEventListener('keydown', (e) => {
   if (e.key === 'Enter'){ e.preventDefault(); document.getElementById('similarToBtn').click(); }
 });
+
+/* ---------- Gaming-Events (Gamescom, Game Awards, State of Play usw.) ---------- */
+document.getElementById('eventQuickSelect').addEventListener('change', (e) => {
+  if (!e.target.value) return;
+  document.getElementById('eventSearchInput').value = e.target.value;
+  document.getElementById('eventSearchBtn').click();
+  e.target.value = '';
+});
+document.getElementById('eventSearchInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter'){ e.preventDefault(); document.getElementById('eventSearchBtn').click(); }
+});
+document.getElementById('eventSearchBtn').addEventListener('click', async () => {
+  const q = document.getElementById('eventSearchInput').value.trim();
+  if (!q) return;
+  const listEl = document.getElementById('eventResultsList');
+  const dbGrid = document.getElementById('dbGrid');
+  listEl.innerHTML = '<span class="muted">Suche Events...</span>';
+  dbGrid.innerHTML = '';
+  try{
+    const res = await proxyFetch(`${IGDB_PROXY_URL}?action=events_search&q=${encodeURIComponent(q)}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const events = data.results || [];
+    if (events.length === 0){
+      listEl.innerHTML = '<span class="muted">Kein passendes Event gefunden - IGDB taggt Events teils erst 1-2 Tage nach der Show.</span>';
+      return;
+    }
+    listEl.innerHTML = events.map(ev => `<button class="month-chip" data-id="${ev.id}" data-name="${escapeHtml(ev.name)}">${escapeHtml(ev.name)}${ev.date ? ` (${ev.date})` : ''}</button>`).join('');
+    listEl.querySelectorAll('.month-chip').forEach(chip => {
+      chip.addEventListener('click', () => loadEventGames(chip.dataset.id, chip.dataset.name));
+    });
+  }catch(err){
+    listEl.innerHTML = `<span class="muted" style="color:var(--red);">Fehler: ${err.message}</span>`;
+  }
+});
+
+async function loadEventGames(eventId, eventName){
+  const dbGrid = document.getElementById('dbGrid');
+  dbGrid.innerHTML = `<p class="muted">Lade Spiele von "${escapeHtml(eventName)}"...</p>`;
+  try{
+    const res = await proxyFetch(`${IGDB_PROXY_URL}?action=event_games&id=${eventId}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    renderDbGrid(data.results || []);
+  }catch(err){
+    dbGrid.innerHTML = `<p style="color:var(--red);">Fehler beim Laden: ${err.message}</p>`;
+  }
+}
 
 function renderDbGrid(results){
   const grid = document.getElementById('dbGrid');
