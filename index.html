@@ -293,7 +293,8 @@
   }
   .db-heart:hover{border-color:var(--red); color:var(--red);}
   .db-heart.added{background:var(--red); border-color:var(--red); color:#fff; cursor:default;}
-  .db-btn-row{display:flex; gap:8px; margin-top:auto;}
+  .db-btn-row{display:flex; gap:8px; margin-top:auto; flex-wrap:wrap;}
+  .db-btn-row > *{flex:1; min-width:120px;}
   .db-btn-row .db-heart{margin-top:0; flex:1;}
   .db-btn-row .cal-trailer{font-size:12.5px; padding:7px 10px;}
   .db-card .cal-trailer-embed{margin-top:8px; max-width:none; aspect-ratio:16/9;}
@@ -489,7 +490,7 @@
     .tabs{overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch;}
     .tab-btn{flex-shrink:0;}
     .watch-remove-btn{opacity:0.5;}
-    .db-grid{grid-template-columns:repeat(2,1fr);}
+    .db-grid{grid-template-columns:1fr;}
   }
   @media (min-width: 721px){
     .mobile-cards{display:none;}
@@ -663,7 +664,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-25-videomodal-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-25-mobiledbgrid-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
