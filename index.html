@@ -397,6 +397,23 @@
   .confirm-box p{margin:0 0 18px; font-size:14px; color:var(--text); line-height:1.5;}
   .confirm-actions{display:flex; gap:10px; justify-content:flex-end;}
 
+  .video-modal-overlay{
+    position:fixed; inset:0; background:rgba(6,8,14,0.85); z-index:220;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .video-modal-box{
+    position:relative; width:100%; max-width:900px;
+  }
+  .video-modal-player{
+    width:100%; aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:#000;
+  }
+  .video-modal-player iframe{width:100%; height:100%; border:0; display:block;}
+  .video-modal-close{
+    position:absolute; top:-42px; right:0; background:var(--bg-elev); border:1px solid var(--line);
+    color:#fff; width:34px; height:34px; border-radius:8px; cursor:pointer; font-size:15px;
+  }
+  .video-modal-close:hover{border-color:var(--red); color:var(--red);}
+
   .dusty-flag{color:var(--gold); font-size:11px; margin-left:6px;}
   .critic-badge{font-size:11px; font-weight:700; margin-left:6px;}
   .preorder-flag{font-size:11px; margin-left:6px;}
@@ -585,6 +602,13 @@
 <body>
 <div id="toastContainer" class="toast-container"></div>
 
+<div id="videoModalOverlay" class="video-modal-overlay" style="display:none;">
+  <div class="video-modal-box">
+    <button class="video-modal-close" id="videoModalCloseBtn" type="button">✕</button>
+    <div class="video-modal-player" id="videoModalPlayer"></div>
+  </div>
+</div>
+
 <div id="loginScreen" class="login-screen">
   <div class="login-box" id="loginBoxNormal">
     <h1 class="login-title">Zocker<span>liste</span></h1>
@@ -639,7 +663,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-25-btnfix-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-25-videomodal-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
@@ -3349,32 +3373,38 @@ function renderKalender(){
 }
 
 /* ---------- Eingebettete Trailer-Vorschau (über YouTube Data API) ---------- */
+/* ---------- Gemeinsames großes Trailer-Modal (statt winziger Einbettung in der Karte) ---------- */
+function openVideoModal(videoId){
+  document.getElementById('videoModalPlayer').innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1" title="Trailer" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+  document.getElementById('videoModalOverlay').style.display = 'flex';
+}
+function closeVideoModal(){
+  document.getElementById('videoModalOverlay').style.display = 'none';
+  document.getElementById('videoModalPlayer').innerHTML = '';
+}
+document.getElementById('videoModalCloseBtn').addEventListener('click', closeVideoModal);
+document.getElementById('videoModalOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'videoModalOverlay') closeVideoModal();
+});
+
 async function toggleTrailerEmbed(btn){
-  const wrap = btn.closest('.cal-item-wrap');
-  const embedEl = wrap.querySelector('.cal-trailer-embed');
-  if (embedEl.style.display !== 'none'){
-    embedEl.style.display = 'none';
-    embedEl.innerHTML = '';
-    btn.textContent = '▶ Trailer';
-    return;
-  }
+  const origText = btn.textContent;
   btn.textContent = '⏳ Lade...';
-  embedEl.style.display = 'block';
-  embedEl.innerHTML = '<p class="muted" style="padding:10px;">Suche Trailer...</p>';
+  btn.disabled = true;
   try{
     const res = await proxyFetch(`${IGDB_PROXY_URL}?action=youtube&q=${encodeURIComponent(btn.dataset.title + ' trailer')}`);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     if (!data.found){
-      embedEl.innerHTML = '<p class="muted" style="padding:10px;">Kein Trailer gefunden.</p>';
-      btn.textContent = '▶ Trailer';
+      showToast('Kein Trailer gefunden.', 'warn');
       return;
     }
-    embedEl.innerHTML = `<iframe width="100%" height="100%" src="https://www.youtube-nocookie.com/embed/${data.videoId}?autoplay=1" title="Trailer" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
-    btn.textContent = '✕ Trailer schließen';
+    openVideoModal(data.videoId);
   }catch(err){
-    embedEl.innerHTML = `<p style="color:var(--red); padding:10px;">Trailer konnte nicht geladen werden: ${err.message}</p>`;
-    btn.textContent = '▶ Trailer';
+    showToast('Trailer konnte nicht geladen werden: ' + err.message, 'error');
+  }finally{
+    btn.textContent = origText;
+    btn.disabled = false;
   }
 }
 
@@ -3740,33 +3770,7 @@ function renderDbGrid(results){
 }
 
 // Wie toggleTrailerEmbed im Kalender, aber der Ziel-Container liegt hier nicht im .cal-item-wrap, sondern direkt im .db-body
-async function toggleDbTrailerEmbed(btn){
-  const embedEl = btn.closest('.db-body').querySelector('.cal-trailer-embed');
-  if (embedEl.style.display !== 'none'){
-    embedEl.style.display = 'none';
-    embedEl.innerHTML = '';
-    btn.textContent = '▶ Trailer';
-    return;
-  }
-  btn.textContent = '⏳ Lade...';
-  embedEl.style.display = 'block';
-  embedEl.innerHTML = '<p class="muted" style="padding:10px;">Suche Trailer...</p>';
-  try{
-    const res = await proxyFetch(`${IGDB_PROXY_URL}?action=youtube&q=${encodeURIComponent(btn.dataset.title + ' trailer')}`);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    if (!data.found){
-      embedEl.innerHTML = '<p class="muted" style="padding:10px;">Kein Trailer gefunden.</p>';
-      btn.textContent = '▶ Trailer';
-      return;
-    }
-    embedEl.innerHTML = `<iframe width="100%" height="100%" src="https://www.youtube-nocookie.com/embed/${data.videoId}?autoplay=1" title="Trailer" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
-    btn.textContent = '✕ Trailer schließen';
-  }catch(err){
-    embedEl.innerHTML = `<p style="color:var(--red); padding:10px;">Trailer konnte nicht geladen werden: ${err.message}</p>`;
-    btn.textContent = '▶ Trailer';
-  }
-}
+const toggleDbTrailerEmbed = toggleTrailerEmbed;
 
 // Fügt ein Datenbank-Ergebnis hinzu, oder entfernt es wieder, falls schon in der Liste (Herz-Toggle)
 async function toggleGameFromDbResult(r, btn){
