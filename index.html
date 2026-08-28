@@ -639,7 +639,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-25-mclink-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-25-btnfix-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
@@ -3323,13 +3323,13 @@ function renderKalender(){
         ${g.price ? `<span class="muted">${parseFloat(g.price).toFixed(2)} €</span>` : ''}
         <button class="cal-sales-btn" type="button" data-id="${g.id}" title="Preis beobachten & zum Sales Tracker">💰</button>
         <a class="cal-trailer" href="https://www.google.com/search?q=site:metacritic.com+${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Metacritic-Wertung nachschauen (falls schon Tests da sind)">Ⓜ️ Metacritic</a>
-        <button class="cal-trailer" type="button" data-title="${escapeHtml(g.title)}">▶ Trailer</button>
+        <button class="cal-trailer cal-trailer-btn" type="button" data-title="${escapeHtml(g.title)}">▶ Trailer</button>
       </div>
       <div class="cal-trailer-embed" style="display:none;"></div>
     </div>`;
   }).join('');
 
-  calList.querySelectorAll('.cal-trailer').forEach(btn => {
+  calList.querySelectorAll('.cal-trailer-btn').forEach(btn => {
     btn.addEventListener('click', () => toggleTrailerEmbed(btn));
   });
 
@@ -3720,7 +3720,7 @@ function renderDbGrid(results){
         <div class="db-date">${r.released || 'TBA'}${critic ? ` · <span style="color:${criticColor}; font-weight:700;">★ ${critic}</span>` : ''}</div>
         <div class="db-btn-row">
           <button class="db-heart ${already?'added':''}" data-id="${r.id}">${already ? '✓ In deiner Liste (entfernen)' : '❤ Zur Liste hinzufügen'}</button>
-          <button class="cal-trailer" type="button" data-title="${escapeHtml(r.name)}">▶ Trailer</button>
+          <button class="cal-trailer cal-trailer-btn" type="button" data-title="${escapeHtml(r.name)}">▶ Trailer</button>
         </div>
         <div class="cal-trailer-embed" style="display:none;"></div>
       </div>
@@ -3734,7 +3734,7 @@ function renderDbGrid(results){
       toggleGameFromDbResult(r, btn);
     });
   });
-  grid.querySelectorAll('.db-card .cal-trailer').forEach(btn => {
+  grid.querySelectorAll('.db-card .cal-trailer-btn').forEach(btn => {
     btn.addEventListener('click', () => toggleDbTrailerEmbed(btn));
   });
 }
@@ -4585,7 +4585,7 @@ async function renderRecommendations(hof){
         <div class="db-date">${r.released || 'TBA'}</div>
         <div class="db-btn-row">
           <button class="db-heart" data-id="${r.id}">❤ Zur Liste hinzufügen</button>
-          <button class="cal-trailer" type="button" data-title="${escapeHtml(r.name)}">▶ Trailer</button>
+          <button class="cal-trailer cal-trailer-btn" type="button" data-title="${escapeHtml(r.name)}">▶ Trailer</button>
         </div>
         <div class="cal-trailer-embed" style="display:none;"></div>
       </div>
@@ -4597,7 +4597,7 @@ async function renderRecommendations(hof){
         toggleGameFromDbResult(r, btn);
       });
     });
-    grid.querySelectorAll('.db-card .cal-trailer').forEach(btn => {
+    grid.querySelectorAll('.db-card .cal-trailer-btn').forEach(btn => {
       btn.addEventListener('click', () => toggleDbTrailerEmbed(btn));
     });
   }catch(err){
