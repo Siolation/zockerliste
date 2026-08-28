@@ -416,6 +416,7 @@
   .video-modal-close:hover{border-color:var(--red); color:var(--red);}
 
   .dusty-flag{color:var(--gold); font-size:11px; margin-left:6px;}
+  .new-flag{font-size:11px; margin-right:6px;}
   .critic-badge{font-size:11px; font-weight:700; margin-left:6px;}
   .preorder-flag{font-size:11px; margin-left:6px;}
   .verdict-pill{padding:2px 8px; border-radius:6px; font-size:12.5px; font-weight:600;}
@@ -531,6 +532,11 @@
     width:16px; height:16px; cursor:pointer;
   }
   .ctile:hover .ctile-select, .ctile-select:checked{opacity:1;}
+  .ctile-new-flag{
+    position:absolute; bottom:6px; left:6px; z-index:2; font-size:15px;
+    background:rgba(10,12,20,0.75); border-radius:6px; padding:2px 5px;
+  }
+  .ctile.grid-focused{outline:3px solid var(--royal-hi); outline-offset:2px;}
   .ctile img{width:100%; height:100%; object-fit:cover; display:block;}
   .ctile-noimg{
     width:100%; height:100%; display:flex; align-items:center; justify-content:center;
@@ -569,6 +575,9 @@
   @keyframes pulseGlow{
     0%, 100% { box-shadow: 0 0 0 3px var(--royal-hi), 0 0 20px 4px rgba(107,133,255,0.5); }
     50% { box-shadow: 0 0 0 3px var(--royal-hi), 0 0 4px 1px rgba(107,133,255,0.2); }
+  }
+  .roulette-flash{
+    box-shadow: 0 0 0 3px var(--gold), 0 0 16px 4px rgba(232,163,61,0.5);
   }
   .ctile-overlay b{color:#fff;}
   .ctile-hltb{
@@ -664,7 +673,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-25-mobiledbgrid-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-25-autoadvance-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
@@ -687,6 +696,7 @@
       <button class="drawer-item" id="exportBtn" type="button">⬇ JSON-Export</button>
       <button class="drawer-item" id="csvExportBtn" type="button">⬇ CSV-Export</button>
       <button class="drawer-item" id="importBtn" type="button">⬆ Import</button>
+      <button class="drawer-item" id="libraryCardBtn" type="button">🖼️ Bibliothekskarte exportieren</button>
       <input type="file" id="importFile" accept=".json" style="display:none;">
     </div>
     <div class="side-drawer-section">
@@ -774,6 +784,7 @@
         <button class="btn btn-ghost" id="gridSortDirBtn" type="button" title="Reihenfolge umkehren">▲</button>
       </div>
     </div>
+    <div id="genreChipsRow" class="month-chips" style="margin-bottom:16px;"></div>
     <div id="syncProgress" class="tab-hint" style="display:none;"></div>
     <div id="dupCheckPanel" class="table-card" style="display:none; padding:18px 20px; margin-bottom:20px;"></div>
     <div id="steamRecentPanel" class="table-card" style="display:none; padding:18px 20px; margin-bottom:20px;"></div>
@@ -1255,8 +1266,10 @@ function showLogin(message){
 async function showApp(){
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('mainApp').style.display = 'block';
+  try{ lastVisitTs = parseInt(localStorage.getItem('zl_last_visit') || '0', 10) || null; }catch(e){}
   await loadGames();
   updateAppBadge();
+  try{ localStorage.setItem('zl_last_visit', String(Date.now())); }catch(e){}
 }
 
 // App-Icon-Badge: Anzahl der Releases in den nächsten 7 Tagen (nur falls der Browser das unterstützt)
@@ -1455,6 +1468,7 @@ window.storage = {
 };
 
 let lastRenderedIds = [];
+let gridFocusedIndex = -1;
 let selectedIds = new Set();
 
 // Farbcodierung für Fazit-Noten (nutzt dieselbe Skala wie parseVerdict: niedrig = gut)
@@ -1573,7 +1587,28 @@ async function loadGames(){
     games = IMPORT_SEED;
     await saveGames();
   }
-  render();
+  if (autoAdvanceReleasedGames()){
+    render();
+    await saveGames();
+  } else {
+    render();
+  }
+}
+
+// Spiele, deren Releasedatum erreicht ist, wechseln automatisch von "Kommt noch" zu "Noch zocken"
+function autoAdvanceReleasedGames(){
+  const today = new Date().toISOString().slice(0,10);
+  let changedTitles = [];
+  games.forEach(g => {
+    if (g.status === 'Kommt noch' && g.releasedate && g.releasedate <= today){
+      g.status = 'Noch zocken';
+      changedTitles.push(g.title);
+    }
+  });
+  if (changedTitles.length > 0){
+    showToast(`🎉 ${changedTitles.length} Spiel${changedTitles.length===1?'':'e'} ${changedTitles.length===1?'ist':'sind'} jetzt erschienen und ${changedTitles.length===1?'steht':'stehen'} auf "Noch zocken": <b>${changedTitles.slice(0,3).map(escapeHtml).join(', ')}${changedTitles.length>3 ? '...' : ''}</b>`, 'success', 6000);
+  }
+  return changedTitles.length > 0;
 }
 
 async function saveGames(){
@@ -1707,6 +1742,13 @@ function isDusty(g){
   return days > 365;
 }
 
+// "Neu seit letztem Besuch": Spiele, die seit dem letzten Öffnen der App hinzugefügt wurden
+let lastVisitTs = null;
+function isNewSinceVisit(g){
+  if (!lastVisitTs || !g.addedAt) return false;
+  return new Date(g.addedAt).getTime() > lastVisitTs;
+}
+
 const PRIORITY_LEVELS = ['1. Must Have', '2. Nach Must Have', '3. Wenn Zeit da ist', '4. Bei Langeweile', '5. Kommt noch'];
 
 // Wisch-Geste auf mobilen Karten: nach rechts = Priorität hoch, nach links = Priorität runter (nur bei Status "Noch zocken")
@@ -1748,6 +1790,27 @@ function enableSwipeGesture(cardEl){
   }, { passive: true });
 }
 
+let activeGenreFilter = null;
+
+// Nur die 6 häufigsten Genres als Chips, damit es aufm Handy nicht überladen wirkt
+function renderGenreChips(){
+  const el = document.getElementById('genreChipsRow');
+  const counts = {};
+  games.forEach(g => {
+    if (isVrGame(g) || !g.genre) return;
+    g.genre.split(',').map(x=>x.trim()).filter(Boolean).forEach(genre => counts[genre] = (counts[genre]||0)+1);
+  });
+  const topGenres = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([g])=>g);
+  if (topGenres.length === 0){ el.innerHTML = ''; return; }
+  el.innerHTML = topGenres.map(g => `<button class="month-chip ${activeGenreFilter===g?'active':''}" data-genre="${escapeHtml(g)}">${escapeHtml(g)}</button>`).join('');
+  el.querySelectorAll('.month-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      activeGenreFilter = activeGenreFilter === chip.dataset.genre ? null : chip.dataset.genre;
+      renderTable();
+    });
+  });
+}
+
 function renderTable(){
   const search = document.getElementById('searchInput').value.toLowerCase();
   const statusVal = document.getElementById('statusFilter').value;
@@ -1763,8 +1826,11 @@ function renderTable(){
     }
     if (statusVal && g.status !== statusVal) return false;
     if (prioVal && g.priority !== prioVal) return false;
+    if (activeGenreFilter && !(g.genre||'').split(',').map(x=>x.trim()).includes(activeGenreFilter)) return false;
     return true;
   });
+
+  renderGenreChips();
 
   const { col, dir } = currentSort;
   const mult = dir === 'asc' ? 1 : -1;
@@ -1803,7 +1869,7 @@ function renderTable(){
     return `<tr data-id="${g.id}">
       <td><input type="checkbox" class="row-select" data-id="${g.id}" ${selectedIds.has(g.id)?'checked':''}></td>
       <td class="row-cover-cell">${g.cover ? `<img class="row-cover" src="${g.cover}" alt="">` : ''}</td>
-      <td class="title-cell">${escapeHtml(g.title)}${(g.platform && !(g.source === 'steam' && g.platform === 'PC')) ? `<span class="platform-tag">${escapeHtml(g.platform)}</span>` : ''}${criticBadge(g)}${g.source === 'steam' ? `<img class="steam-badge" src="steam-icon.png" title="Von Steam importiert" alt="Steam">` : ''}${g.source === 'psn' ? `<img class="psn-badge" src="psn-icon.png" title="Von PlayStation importiert" alt="PSN">` : ''}${isDusty(g) ? `<span class="dusty-flag" title="Seit über einem Jahr im Backlog ohne Fortschritt">🕸️</span>` : ''}${g.preordered ? `<span class="preorder-flag" title="Vorbestellt">🎟️</span>` : ''}<a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></td>
+      <td class="title-cell">${isNewSinceVisit(g) ? `<span class="new-flag">🆕</span>` : ''}${escapeHtml(g.title)}${(g.platform && !(g.source === 'steam' && g.platform === 'PC')) ? `<span class="platform-tag">${escapeHtml(g.platform)}</span>` : ''}${criticBadge(g)}${g.source === 'steam' ? `<img class="steam-badge" src="steam-icon.png" title="Von Steam importiert" alt="Steam">` : ''}${g.source === 'psn' ? `<img class="psn-badge" src="psn-icon.png" title="Von PlayStation importiert" alt="PSN">` : ''}${isDusty(g) ? `<span class="dusty-flag" title="Seit über einem Jahr im Backlog ohne Fortschritt">🕸️</span>` : ''}${g.preordered ? `<span class="preorder-flag" title="Vorbestellt">🎟️</span>` : ''}<a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></td>
       <td><span class="status-pill" style="background:${color}22; color:${color}; border:1px solid ${color}55;">${g.status||'–'}</span></td>
       <td class="prio-tag">${(g.status === 'Noch zocken' && g.priority) ? g.priority.replace(/^[0-9]+\\.\\s*/,'') : '<span class="muted">–</span>'}</td>
       <td>${g.price ? parseFloat(g.price).toFixed(2)+' €' : '<span class="muted">–</span>'}</td>
@@ -1838,7 +1904,7 @@ function renderTable(){
     return `<div class="mcard" data-id="${g.id}">
       <div class="mcard-top">
         ${g.cover ? `<img class="mcard-cover" src="${g.cover}" alt="">` : ''}
-        <span class="mcard-title" style="flex:1;">${escapeHtml(g.title)}${isDusty(g) ? ` <span class="dusty-flag" title="Seit über einem Jahr im Backlog">🕸️</span>` : ''}${g.preordered ? ` <span class="preorder-flag" title="Vorbestellt">🎟️</span>` : ''} <a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></span>
+        <span class="mcard-title" style="flex:1;">${isNewSinceVisit(g) ? `<span class="new-flag">🆕</span>` : ''}${escapeHtml(g.title)}${isDusty(g) ? ` <span class="dusty-flag" title="Seit über einem Jahr im Backlog">🕸️</span>` : ''}${g.preordered ? ` <span class="preorder-flag" title="Vorbestellt">🎟️</span>` : ''} <a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></span>
         <span class="status-pill" style="background:${color}22; color:${color}; border:1px solid ${color}55; flex-shrink:0;">${g.status||'–'}</span>
       </div>
       <div class="mcard-meta">
@@ -1886,6 +1952,7 @@ function renderCoverGrid(list, gridId){
       ${withSelection ? `<input type="checkbox" class="ctile-select row-select" data-id="${g.id}" ${selectedIds.has(g.id)?'checked':''}>` : ''}
       ${g.cover ? `<img src="${g.cover}" alt="">` : `<div class="ctile-noimg">${escapeHtml(g.title)}</div>`}
       <span class="ctile-status" style="background:${color}dd; color:#fff;">${g.status||'–'}</span>
+      ${isNewSinceVisit(g) ? `<span class="ctile-new-flag">🆕</span>` : ''}
       ${platformCornerBadge(g)}
       <div class="ctile-title">${escapeHtml(g.title)}</div>
       <div class="ctile-overlay">
@@ -2131,6 +2198,28 @@ document.addEventListener('keydown', (e) => {
           openEdit(lastRenderedIds[nextIdx]);
         }
       }
+    }
+    return;
+  }
+
+  // Pfeiltasten-Navigation in der Cover-Ansicht (Liste-Register, außerhalb des Bearbeiten-Fensters)
+  if (!inInput && currentView === 'grid' && document.getElementById('tab-liste').style.display !== 'none' && lastRenderedIds.length > 0){
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight'){
+      e.preventDefault();
+      if (gridFocusedIndex === -1) gridFocusedIndex = 0;
+      else gridFocusedIndex = e.key === 'ArrowRight'
+        ? Math.min(gridFocusedIndex + 1, lastRenderedIds.length - 1)
+        : Math.max(gridFocusedIndex - 1, 0);
+      document.querySelectorAll('.ctile.grid-focused').forEach(el => el.classList.remove('grid-focused'));
+      const tile = document.querySelector(`#coverGrid .ctile[data-id="${lastRenderedIds[gridFocusedIndex]}"]`);
+      if (tile){
+        tile.classList.add('grid-focused');
+        tile.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+    if (e.key === 'Enter' && gridFocusedIndex > -1){
+      e.preventDefault();
+      openEdit(lastRenderedIds[gridFocusedIndex]);
     }
   }
 });
@@ -2479,6 +2568,7 @@ document.getElementById('csvExportBtn').addEventListener('click', () => {
 let currentView = localStorage.getItem('zl_view') || 'list';
 function applyView(){
   const isGrid = currentView === 'grid';
+  if (!isGrid) gridFocusedIndex = -1;
   document.getElementById('viewListBtn').classList.toggle('active', !isGrid);
   document.getElementById('viewGridBtn').classList.toggle('active', isGrid);
   document.getElementById('coverGrid').style.display = isGrid ? 'grid' : 'none';
@@ -2618,7 +2708,7 @@ const PRIORITY_WEIGHTS = {
   '5. Kommt noch': 1,
 };
 
-document.getElementById('randomPickBtn').addEventListener('click', () => {
+document.getElementById('randomPickBtn').addEventListener('click', async () => {
   const pool = games.filter(g => g.status === 'Noch zocken');
   if (pool.length === 0){
     showToast('Keine Spiele mit Status "Noch zocken" gefunden.', 'warn');
@@ -2638,15 +2728,33 @@ document.getElementById('randomPickBtn').addEventListener('click', () => {
   if (currentView !== 'grid'){
     currentView = 'grid'; localStorage.setItem('zl_view', currentView); applyView();
   }
-  setTimeout(() => {
-    const tile = document.querySelector(`.ctile[data-id="${pick.id}"]`);
-    if (tile){
-      tile.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      tile.classList.add('pulse-highlight');
-      setTimeout(() => tile.classList.remove('pulse-highlight'), 3200);
+  const btn = document.getElementById('randomPickBtn');
+  btn.disabled = true;
+  await new Promise(r => setTimeout(r, 150));
+
+  // Kurze "Roulette"-Animation: springt schnell durch ein paar Kandidaten, bevor sich's auf die Wahl festlegt
+  const candidateTiles = [...document.querySelectorAll('#coverGrid .ctile')];
+  if (candidateTiles.length > 1){
+    const spinSteps = 14;
+    for (let i=0; i<spinSteps; i++){
+      candidateTiles.forEach(t => t.classList.remove('roulette-flash'));
+      const randomTile = candidateTiles[Math.floor(Math.random() * candidateTiles.length)];
+      randomTile.classList.add('roulette-flash');
+      randomTile.scrollIntoView({ behavior: 'auto', block: 'center' });
+      const delay = 60 + i * 12; // wird zum Schluss langsamer, wie ein auslaufendes Rad
+      await new Promise(r => setTimeout(r, delay));
     }
-  }, 150);
+    candidateTiles.forEach(t => t.classList.remove('roulette-flash'));
+  }
+
+  const tile = document.querySelector(`#coverGrid .ctile[data-id="${pick.id}"]`);
+  if (tile){
+    tile.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    tile.classList.add('pulse-highlight');
+    setTimeout(() => tile.classList.remove('pulse-highlight'), 3200);
+  }
   showToast('🎲 Die Wahl ist gefallen: <b>' + escapeHtml(pick.title) + '</b>', 'success', 4000);
+  btn.disabled = false;
 });
 
 /* ---------- Steam-Bibliothek importieren ---------- */
@@ -4524,6 +4632,68 @@ document.getElementById('genImageBtn').addEventListener('click', async () => {
     showToast('📸 Bild heruntergeladen.', 'success');
   }, 'image/png');
 });
+
+/* ---------- Bibliothekskarte (Cover-Mosaik) exportieren ---------- */
+document.getElementById('libraryCardBtn').addEventListener('click', async () => {
+  const withCover = games.filter(g => g.cover && !isVrGame(g));
+  if (withCover.length === 0){ showToast('Keine Spiele mit Cover vorhanden.', 'warn'); return; }
+
+  const btn = document.getElementById('libraryCardBtn');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ Erstelle Bild...';
+
+  try{
+    // Nach Durchgezockt-Datum, dann Titel sortieren, auf maximal 120 Cover begrenzen (sonst wird's unlesbar)
+    const pool = [...withCover].sort((a,b) => (b.finished||'').localeCompare(a.finished||'') || a.title.localeCompare(b.title)).slice(0, 120);
+    const cols = Math.ceil(Math.sqrt(pool.length * (16/10)));
+    const rows = Math.ceil(pool.length / cols);
+    const tileSize = 140, gap = 6, headerH = 130, footerH = 50;
+    const canvas = document.createElement('canvas');
+    canvas.width = cols * (tileSize + gap) + gap;
+    canvas.height = headerH + rows * (tileSize + gap) + gap + footerH;
+    const ctx = canvas.getContext('2d');
+    drawBackground(ctx, canvas.width, canvas.height);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#6b85ff';
+    ctx.font = '700 22px sans-serif';
+    ctx.fillText('MEINE ZOCKERLISTE', canvas.width/2, 50);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '700 34px sans-serif';
+    ctx.fillText(`${games.filter(g=>!isVrGame(g)).length} Spiele`, canvas.width/2, 92);
+
+    const images = await Promise.all(pool.map(g => loadImageSafe(g.cover)));
+    pool.forEach((g, i) => {
+      const col = i % cols, row = Math.floor(i / cols);
+      const x = gap + col * (tileSize + gap);
+      const y = headerH + gap + row * (tileSize + gap);
+      drawCover(ctx, images[i], g.title, x, y, tileSize, tileSize, 6);
+    });
+
+    ctx.fillStyle = '#565f78';
+    ctx.font = '400 13px sans-serif';
+    ctx.fillText('Erstellt mit Zockerliste · ' + new Date().toLocaleDateString('de-DE'), canvas.width/2, canvas.height - 20);
+
+    canvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'zockerliste-bibliothekskarte.png';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('🖼️ Bibliothekskarte heruntergeladen.', 'success');
+    }, 'image/png');
+  }catch(err){
+    showToast('Fehlgeschlagen: ' + err.message, 'error');
+  }finally{
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+});
+
 document.getElementById('customMusicInput').addEventListener('change', (e) => {
   const f = e.target.files[0];
   document.getElementById('customMusicName').textContent = f ? `🎵 ${f.name}` : 'Keine Datei gewählt - generierte Musik wird verwendet';
