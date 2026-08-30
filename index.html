@@ -9,6 +9,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -673,7 +674,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-25-dataqual-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-25-sixfeatures-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
@@ -731,10 +732,15 @@
         <option value="red">🔴 Rubin</option>
         <option value="gold">🟡 Gold</option>
       </select>
+      <div style="display:flex; align-items:center; gap:8px; margin-top:12px;">
+        <input type="checkbox" id="soundToggle" style="width:auto;">
+        <label style="margin:0; font-size:13px;" for="soundToggle">🔊 Sound bei "Durchgezockt"</label>
+      </div>
     </div>
     <div class="side-drawer-section">
       <div class="side-drawer-label">Datenqualität</div>
       <div id="dataQualityStats" class="tab-hint" style="line-height:1.8;"></div>
+      <button class="drawer-item" id="fillGapBtn" type="button" style="margin-top:6px;">🧩 Nächste Datenlücke bearbeiten</button>
     </div>
     <div class="side-drawer-section">
       <div class="side-drawer-label">Tastenkürzel</div>
@@ -1277,6 +1283,33 @@ async function showApp(){
   await loadGames();
   updateAppBadge();
   try{ localStorage.setItem('zl_last_visit', String(Date.now())); }catch(e){}
+  try{
+    const lastTab = localStorage.getItem('zl_last_tab');
+    if (lastTab && lastTab !== 'liste'){
+      const tabBtn = document.querySelector(`.tab-btn[data-tab="${lastTab}"]`);
+      if (tabBtn) tabBtn.click();
+    }
+  }catch(e){}
+  checkAnniversaries();
+}
+
+// Zeigt einmal pro Tag einen Hinweis, falls heute der Jahrestag eines durchgezockten Spiels ist
+function checkAnniversaries(){
+  const today = new Date();
+  const todayKey = today.toISOString().slice(0,10);
+  let lastShown = null;
+  try{ lastShown = localStorage.getItem('zl_last_anniversary_check'); }catch(e){}
+  if (lastShown === todayKey) return;
+  try{ localStorage.setItem('zl_last_anniversary_check', todayKey); }catch(e){}
+
+  const mmdd = todayKey.slice(5);
+  const anniversaries = games.filter(g => g.finished && g.finished.slice(5) === mmdd && g.finished.slice(0,4) !== todayKey.slice(0,4));
+  anniversaries.forEach(g => {
+    const years = parseInt(todayKey.slice(0,4),10) - parseInt(g.finished.slice(0,4),10);
+    if (years > 0){
+      showToast(`🎉 Vor ${years} Jahr${years===1?'':'en'} hast du <b>${escapeHtml(g.title)}</b> durchgezockt!`, 'success', 6000);
+    }
+  });
 }
 
 // App-Icon-Badge: Anzahl der Releases in den nächsten 7 Tagen (nur falls der Browser das unterstützt)
@@ -1441,6 +1474,21 @@ function renderDataQualityStats(){
     return `<div style="display:flex; justify-content:space-between;"><span>${label}</span><b style="color:${color};">${p}%</b></div>`;
   }).join('') + `<div class="tab-hint" style="margin-top:6px;">Basis: ${total} Spiele</div>`;
 }
+
+document.getElementById('fillGapBtn').addEventListener('click', () => {
+  const relevant = games.filter(g => !isVrGame(g));
+  const gap = relevant.find(g => !g.cover || !g.genre || !g.duration);
+  if (!gap){
+    showToast('✓ Keine offensichtlichen Datenlücken mehr!', 'success');
+    return;
+  }
+  const missing = [];
+  if (!gap.cover) missing.push('Cover');
+  if (!gap.genre) missing.push('Genre');
+  if (!gap.duration) missing.push('Dauer');
+  openEdit(gap.id);
+  setTimeout(() => showToast(`Fehlt bei "${escapeHtml(gap.title)}": <b>${missing.join(', ')}</b>`, 'warn', 4000), 200);
+});
 document.getElementById('hamburgerBtn').addEventListener('click', openDrawer);
 document.getElementById('drawerCloseBtn').addEventListener('click', closeDrawer);
 document.getElementById('sideDrawerOverlay').addEventListener('click', closeDrawer);
@@ -1550,6 +1598,7 @@ document.getElementById('bulkApplyStatusBtn').addEventListener('click', async ()
   render();
   await saveGames();
   showToast('✓ Status aktualisiert.', 'success');
+  if (newStatus === 'Durchgezockt') playCompletionChime();
 });
 
 document.getElementById('bulkDeleteBtn').addEventListener('click', async () => {
@@ -2456,9 +2505,13 @@ document.getElementById('gameForm').addEventListener('submit', async (e) => {
       cover: document.getElementById('f_cover').value,
       genre: document.getElementById('f_genre').value,
     };
+    let becameCompleted = false;
     if (id){
       const idx = games.findIndex(g => g.id === id);
-      if (idx > -1) games[idx] = {...games[idx], ...data};
+      if (idx > -1){
+        if (games[idx].status !== 'Durchgezockt' && data.status === 'Durchgezockt') becameCompleted = true;
+        games[idx] = {...games[idx], ...data};
+      }
     } else {
       const dup = games.find(g => g.title.trim().toLowerCase() === data.title.toLowerCase());
       if (dup){
@@ -2466,11 +2519,13 @@ document.getElementById('gameForm').addEventListener('submit', async (e) => {
         if (!ok) return;
       }
       games.push({ id: uid(), addedAt: new Date().toISOString().slice(0,10), ...data });
+      if (data.status === 'Durchgezockt') becameCompleted = true;
     }
     closeModal();
     render();
     saveGames().catch(err => console.error('Hintergrund-Speichern fehlgeschlagen', err));
     showToast(id ? '✓ Änderungen gespeichert.' : `✓ "${escapeHtml(data.title)}" hinzugefügt.`, 'success');
+    if (becameCompleted) playCompletionChime();
     refreshDupPanelIfOpen();
   }catch(err){
     console.error('Speichern-Fehler', err);
@@ -2647,6 +2702,35 @@ document.getElementById('themeSelect').addEventListener('change', (e) => {
   localStorage.setItem('zl_theme', t);
 });
 
+/* ---------- Soundeffekt bei "Durchgezockt" ---------- */
+let soundEnabled = localStorage.getItem('zl_sound_enabled') === 'true';
+document.getElementById('soundToggle').checked = soundEnabled;
+document.getElementById('soundToggle').addEventListener('change', (e) => {
+  soundEnabled = e.target.checked;
+  localStorage.setItem('zl_sound_enabled', String(soundEnabled));
+  if (soundEnabled) playCompletionChime();
+});
+function playCompletionChime(){
+  if (!soundEnabled) return;
+  try{
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const notes = [523.25, 659.25, 783.99]; // kleiner Dur-Dreiklang (C-E-G)
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const t = ctx.currentTime + i * 0.09;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.12, t + 0.02);
+      gain.gain.linearRampToValueAtTime(0, t + 0.35);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(t); osc.stop(t + 0.4);
+    });
+    setTimeout(() => ctx.close(), 700);
+  }catch(e){ /* Sound ist nur nettes Extra */ }
+}
+
 /* ---------- In-modal database search ---------- */
 document.getElementById('hltbBtn').addEventListener('click', () => {
   const title = document.getElementById('f_title').value.trim();
@@ -2681,7 +2765,7 @@ document.getElementById('dbSearchBtn').addEventListener('click', async () => {
     const res = await proxyFetch(buildSourceUrl('search', { q }));
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    const results = (data.results || []).slice(0, 6);
+    const results = (data.results || []).slice(0, 8);
     if (results.length === 0){
       resultsEl.innerHTML = '<p class="muted" style="font-size:12px;">Keine Treffer.</p>';
       return;
@@ -3055,6 +3139,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.dataset.tab === 'datenbank') initDatenbankTab();
     if (btn.dataset.tab === 'sales') renderSales();
     if (btn.dataset.tab === 'vr') renderVrTab();
+    try{ localStorage.setItem('zl_last_tab', btn.dataset.tab); }catch(e){}
   });
 });
 
@@ -4713,6 +4798,21 @@ document.getElementById('libraryCardBtn').addEventListener('click', async () => 
     ctx.fillStyle = '#565f78';
     ctx.font = '400 13px sans-serif';
     ctx.fillText('Erstellt mit Zockerliste · ' + new Date().toLocaleDateString('de-DE'), canvas.width/2, canvas.height - 20);
+
+    // QR-Code unten rechts, verlinkt zur Zockerliste-Webseite selbst (Steam/PSN-Profile sind der App nicht bekannt)
+    try{
+      const qrSize = 70;
+      const qrHolder = document.createElement('div');
+      new QRCode(qrHolder, { text: window.location.origin + window.location.pathname, width: qrSize, height: qrSize, colorDark: '#000000', colorLight: '#ffffff' });
+      await new Promise(r => setTimeout(r, 50));
+      const qrCanvas = qrHolder.querySelector('canvas');
+      if (qrCanvas){
+        const qx = canvas.width - qrSize - 16, qy = canvas.height - qrSize - 16;
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(qx-4, qy-4, qrSize+8, qrSize+8);
+        ctx.drawImage(qrCanvas, qx, qy, qrSize, qrSize);
+      }
+    }catch(e){ /* QR-Code ist ein nettes Extra - falls es scheitert, Bild trotzdem ohne QR ausliefern */ }
 
     canvas.toBlob((blob) => {
       const url = URL.createObjectURL(blob);
