@@ -674,7 +674,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-25-sixfeatures-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-25-gapfix-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
@@ -1073,8 +1073,8 @@
       <input type="hidden" id="f_genre">
       <div class="field">
         <label>Titel</label>
-        <div style="display:flex; gap:8px;">
-          <input type="text" id="f_title" required style="flex:1;">
+        <input type="text" id="f_title" required style="width:100%;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
           <button type="button" class="btn btn-ghost" id="dbSearchBtn" style="white-space:nowrap;">🔍 Datenbank</button>
           <button type="button" class="btn btn-ghost" id="hltbBtn" style="white-space:nowrap;">⏱ HowLongToBeat</button>
           <button type="button" class="btn btn-ghost" id="findSimilarBtn" style="white-space:nowrap;" title="Ähnliche Spiele im Datenbank-Register suchen">🔎 Ähnliche</button>
@@ -1475,19 +1475,26 @@ function renderDataQualityStats(){
   }).join('') + `<div class="tab-hint" style="margin-top:6px;">Basis: ${total} Spiele</div>`;
 }
 
-document.getElementById('fillGapBtn').addEventListener('click', () => {
+let gapFillMode = false;
+function findAndOpenNextGap(){
   const relevant = games.filter(g => !isVrGame(g));
-  const gap = relevant.find(g => !g.cover || !g.genre || !g.duration);
+  const durationRelevant = (g) => !['Noch zocken','Kommt noch'].includes(g.status);
+  const gap = relevant.find(g => !g.cover || !g.genre || (!g.duration && durationRelevant(g)));
   if (!gap){
+    gapFillMode = false;
     showToast('✓ Keine offensichtlichen Datenlücken mehr!', 'success');
     return;
   }
   const missing = [];
   if (!gap.cover) missing.push('Cover');
   if (!gap.genre) missing.push('Genre');
-  if (!gap.duration) missing.push('Dauer');
+  if (!gap.duration && durationRelevant(gap)) missing.push('Dauer');
   openEdit(gap.id);
   setTimeout(() => showToast(`Fehlt bei "${escapeHtml(gap.title)}": <b>${missing.join(', ')}</b>`, 'warn', 4000), 200);
+}
+document.getElementById('fillGapBtn').addEventListener('click', () => {
+  gapFillMode = true;
+  findAndOpenNextGap();
 });
 document.getElementById('hamburgerBtn').addEventListener('click', openDrawer);
 document.getElementById('drawerCloseBtn').addEventListener('click', closeDrawer);
@@ -2471,6 +2478,9 @@ function closeModal(){
     showToast('⏱ Timer verworfen, da Fenster geschlossen wurde.', 'warn');
   }
   document.getElementById('overlay').style.display = 'none';
+  if (gapFillMode){
+    setTimeout(findAndOpenNextGap, 300);
+  }
 }
 
 document.getElementById('openAdd').addEventListener('click', openAdd);
@@ -3127,6 +3137,7 @@ function renderSales(){
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
+    if (btn.dataset.tab !== 'liste') gapFillMode = false;
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
