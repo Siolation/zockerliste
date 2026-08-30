@@ -673,7 +673,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-25-autoadvance-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-25-dataqual-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
@@ -717,6 +717,7 @@
     <div class="side-drawer-section">
       <div class="side-drawer-label">Werkzeuge</div>
       <button class="drawer-item" id="syncDbBtn" type="button">🔄 Mit Datenbank abgleichen</button>
+      <button class="drawer-item" id="rawgChangeKey" type="button">🔑 RAWG API-Key ändern</button>
       <button class="drawer-item" id="plannerToggleBtn" type="button">⏳ Zeitplaner</button>
       <button class="drawer-item" id="dupCheckBtn" type="button">🔍 Duplikate prüfen</button>
       <button class="drawer-item" id="steamRecentBtn" type="button"><img class="steam-badge" src="steam-icon.png" alt="" style="margin-left:0; margin-right:8px;">Zuletzt gespielt</button>
@@ -730,6 +731,10 @@
         <option value="red">🔴 Rubin</option>
         <option value="gold">🟡 Gold</option>
       </select>
+    </div>
+    <div class="side-drawer-section">
+      <div class="side-drawer-label">Datenqualität</div>
+      <div id="dataQualityStats" class="tab-hint" style="line-height:1.8;"></div>
     </div>
     <div class="side-drawer-section">
       <div class="side-drawer-label">Tastenkürzel</div>
@@ -780,6 +785,7 @@
           <option value="duration">Dauer</option>
           <option value="verdict">Fazit</option>
           <option value="finished">Durchgezockt am</option>
+          <option value="releasedate">Releasedatum</option>
         </select>
         <button class="btn btn-ghost" id="gridSortDirBtn" type="button" title="Reihenfolge umkehren">▲</button>
       </div>
@@ -837,6 +843,7 @@
             <th data-sort="duration">Dauer <span class="sort-arrow" data-col="duration"></span></th>
             <th data-sort="verdict">Fazit <span class="sort-arrow" data-col="verdict"></span></th>
             <th data-sort="finished">Durchgezockt <span class="sort-arrow" data-col="finished"></span></th>
+            <th data-sort="releasedate">Release <span class="sort-arrow" data-col="releasedate"></span></th>
             <th data-sort="lang">Sprache <span class="sort-arrow" data-col="lang"></span></th>
           </tr>
         </thead>
@@ -960,7 +967,6 @@
       <div class="filters">
         <input type="text" id="rawgSearchInput" placeholder="Spiel suchen...">
         <button class="btn btn-ghost" id="rawgSearchBtn" type="button">Suchen</button>
-        <button class="btn btn-ghost" id="rawgChangeKey" type="button">API-Key ändern</button>
       </div>
       <div class="month-chips" id="dbSearchHistory"></div>
       <div class="filters" style="margin-top:8px;">
@@ -1065,6 +1071,7 @@
           <input type="text" id="f_title" required style="flex:1;">
           <button type="button" class="btn btn-ghost" id="dbSearchBtn" style="white-space:nowrap;">🔍 Datenbank</button>
           <button type="button" class="btn btn-ghost" id="hltbBtn" style="white-space:nowrap;">⏱ HowLongToBeat</button>
+          <button type="button" class="btn btn-ghost" id="findSimilarBtn" style="white-space:nowrap;" title="Ähnliche Spiele im Datenbank-Register suchen">🔎 Ähnliche</button>
         </div>
         <div id="dbSearchResults" class="db-search-results"></div>
       </div>
@@ -1409,10 +1416,30 @@ document.getElementById('logoutBtn').addEventListener('click', () => {
 function openDrawer(){
   document.getElementById('sideDrawer').classList.add('open');
   document.getElementById('sideDrawerOverlay').style.display = 'block';
+  renderDataQualityStats();
 }
 function closeDrawer(){
   document.getElementById('sideDrawer').classList.remove('open');
   document.getElementById('sideDrawerOverlay').style.display = 'none';
+}
+
+function renderDataQualityStats(){
+  const el = document.getElementById('dataQualityStats');
+  const relevant = games.filter(g => !isVrGame(g));
+  const total = relevant.length;
+  if (total === 0){ el.textContent = 'Keine Spiele vorhanden.'; return; }
+  const pct = (field) => Math.round((relevant.filter(g => g[field]).length / total) * 100);
+  const rows = [
+    ['Cover', pct('cover')],
+    ['Genre', pct('genre')],
+    ['Dauer', pct('duration')],
+    ['Preis', pct('price')],
+    ['Kritiker-Wertung', pct('criticRating')],
+  ];
+  el.innerHTML = rows.map(([label, p]) => {
+    const color = p >= 75 ? 'var(--green)' : p >= 40 ? 'var(--gold)' : 'var(--red)';
+    return `<div style="display:flex; justify-content:space-between;"><span>${label}</span><b style="color:${color};">${p}%</b></div>`;
+  }).join('') + `<div class="tab-hint" style="margin-top:6px;">Basis: ${total} Spiele</div>`;
 }
 document.getElementById('hamburgerBtn').addEventListener('click', openDrawer);
 document.getElementById('drawerCloseBtn').addEventListener('click', closeDrawer);
@@ -1876,6 +1903,7 @@ function renderTable(){
       <td>${g.duration ? parseFloat(g.duration).toFixed(0)+' Std.' : '<span class="muted">–</span>'}</td>
       <td>${g.verdict ? `<span class="verdict-pill" style="background:${verdictColor}22; color:${verdictColor};">${escapeHtml(g.verdict)}</span>` : '<span class="muted">–</span>'}</td>
       <td>${g.finished || '<span class="muted">–</span>'}</td>
+      <td class="muted">${g.releasedate || '–'}</td>
       <td class="muted">${g.lang || '–'}</td>
     </tr>`;
   }).join('');
@@ -2624,6 +2652,17 @@ document.getElementById('hltbBtn').addEventListener('click', () => {
   const title = document.getElementById('f_title').value.trim();
   if (!title){ alert('Erst einen Titel eingeben.'); return; }
   window.open('https://howlongtobeat.com/?q=' + encodeURIComponent(title), '_blank', 'noopener');
+});
+
+document.getElementById('findSimilarBtn').addEventListener('click', () => {
+  const title = document.getElementById('f_title').value.trim();
+  if (!title){ showToast('Erst einen Titel eingeben.', 'warn'); return; }
+  closeModal();
+  document.querySelector('.tab-btn[data-tab="datenbank"]').click();
+  setTimeout(() => {
+    document.getElementById('similarToInput').value = title;
+    document.getElementById('similarToBtn').click();
+  }, 100);
 });
 
 document.getElementById('dbSearchBtn').addEventListener('click', async () => {
