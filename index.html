@@ -10,6 +10,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -48,9 +49,14 @@
   .hamburger-btn{
     background:var(--bg-elev); border:1px solid var(--line); color:var(--text);
     width:42px; height:42px; border-radius:9px; font-size:19px; cursor:pointer;
-    margin-right:6px; flex-shrink:0; order:-1;
+    margin-right:6px; flex-shrink:0; order:-1; position:relative;
   }
   .hamburger-btn:hover{border-color:var(--royal-hi); color:var(--royal-hi);}
+  .backup-warn-badge{
+    position:absolute; top:-5px; right:-5px; font-size:12px; line-height:1;
+    background:var(--gold); border-radius:50%; width:18px; height:18px;
+    display:flex; align-items:center; justify-content:center;
+  }
   .logout-icon-btn{
     background:var(--bg-elev); border:1px solid var(--line); color:var(--text-muted);
     width:40px; height:40px; border-radius:50%; font-size:17px; cursor:pointer; flex-shrink:0;
@@ -385,6 +391,12 @@
   .toast.error{border-left-color:var(--red);}
   .toast.warn{border-left-color:var(--gold);}
   .toast b{color:#fff;}
+  .search-hl{background:var(--gold); color:#1a1400; border-radius:3px; padding:0 2px; font-weight:700;}
+  .toast-action-btn{
+    display:block; margin-top:8px; background:none; border:1px solid var(--royal-hi); color:var(--royal-hi);
+    border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer; font-weight:600;
+  }
+  .toast-action-btn:hover{background:var(--royal-dim);}
   @keyframes toastIn{from{opacity:0; transform:translateX(20px);} to{opacity:1; transform:translateX(0);}}
 
   /* Bestätigungs-Dialog (statt Browser-confirm) */
@@ -449,6 +461,16 @@
     align-items:center; gap:14px; cursor:pointer;
   }
   .weekly-focus-card:hover{border-color:var(--royal-hi);}
+  .release-reminder-card{
+    background:linear-gradient(135deg, #e8a33d22, var(--bg-elev));
+    border:1px solid var(--gold); border-radius:12px; padding:14px 18px; margin-bottom:16px;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .release-reminder-item{display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:13.5px;}
+  .release-reminder-close{
+    background:none; border:none; color:var(--text-faint); font-size:16px; cursor:pointer; padding:0 4px;
+  }
+  .release-reminder-close:hover{color:var(--red);}
   .backup-reminder{
     background:#e8a33d15; border:1px solid #e8a33d40; border-radius:10px;
     padding:10px 16px; margin-bottom:16px; font-size:13px; color:var(--gold);
@@ -670,11 +692,11 @@
 
 <div class="wrap" id="mainApp" style="display:none;">
   <header>
-    <button class="hamburger-btn" id="hamburgerBtn" type="button" title="Menü">☰</button>
+    <button class="hamburger-btn" id="hamburgerBtn" type="button" title="Menü">☰<span id="backupWarnBadge" class="backup-warn-badge" style="display:none;" title="">⚠️</span></button>
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-25-modalreview-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-25-releasereminder-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
@@ -696,6 +718,7 @@
       <button class="drawer-item" id="psnImportBtn" type="button"><img class="psn-badge" src="psn-icon.png" alt="" style="margin-left:0; margin-right:8px;">PlayStation importieren</button>
       <button class="drawer-item" id="exportBtn" type="button">⬇ JSON-Export</button>
       <button class="drawer-item" id="csvExportBtn" type="button">⬇ CSV-Export</button>
+      <button class="drawer-item" id="xlsxExportBtn" type="button">⬇ Excel-Export (.xlsx)</button>
       <button class="drawer-item" id="importBtn" type="button">⬆ Import</button>
       <button class="drawer-item" id="libraryCardBtn" type="button">🖼️ Bibliothekskarte exportieren</button>
       <input type="file" id="importFile" accept=".json" style="display:none;">
@@ -736,11 +759,19 @@
         <input type="checkbox" id="soundToggle" style="width:auto;">
         <label style="margin:0; font-size:13px;" for="soundToggle">🔊 Sound bei "Durchgezockt"</label>
       </div>
+      <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+        <input type="checkbox" id="releaseReminderToggle" style="width:auto;">
+        <label style="margin:0; font-size:13px;" for="releaseReminderToggle">🔔 Release-Erinnerungen (heute / in 7 Tagen)</label>
+      </div>
     </div>
     <div class="side-drawer-section">
       <div class="side-drawer-label">Datenqualität</div>
       <div id="dataQualityStats" class="tab-hint" style="line-height:1.8;"></div>
       <button class="drawer-item" id="fillGapBtn" type="button" style="margin-top:6px;">🧩 Nächste Datenlücke bearbeiten</button>
+    </div>
+    <div class="side-drawer-section">
+      <div class="side-drawer-label">Kürzlich bearbeitet</div>
+      <div id="recentlyEditedList"></div>
     </div>
     <div class="side-drawer-section">
       <div class="side-drawer-label">Tastenkürzel</div>
@@ -765,10 +796,10 @@
   </nav>
 
   <div id="tab-liste" class="tab-panel">
-    <div id="backupReminder" class="backup-reminder" style="display:none;"></div>
     <div id="offlineHint" class="backup-reminder" style="display:none; background:#e8556b15; border-color:#e8556b40; color:var(--red);"></div>
     <div id="dashboardCard" class="dashboard-card" style="display:none;"></div>
     <div id="weeklyFocusCard" class="weekly-focus-card" style="display:none;"></div>
+    <div id="releaseReminderCard" class="release-reminder-card" style="display:none;"></div>
     <div class="filters">
       <input type="text" id="searchInput" placeholder="Titel oder Bemerkung suchen...">
       <select id="statusFilter"><option value="">Alle Status</option></select>
@@ -1292,6 +1323,7 @@ async function showApp(){
     }
   }catch(e){}
   checkAnniversaries();
+  checkReleaseReminders();
 }
 
 // Zeigt einmal pro Tag einen Hinweis, falls heute der Jahrestag eines durchgezockten Spiels ist
@@ -1451,6 +1483,7 @@ function openDrawer(){
   document.getElementById('sideDrawer').classList.add('open');
   document.getElementById('sideDrawerOverlay').style.display = 'block';
   renderDataQualityStats();
+  renderRecentlyEdited();
 }
 function closeDrawer(){
   document.getElementById('sideDrawer').classList.remove('open');
@@ -1474,6 +1507,30 @@ function renderDataQualityStats(){
     const color = p >= 75 ? 'var(--green)' : p >= 40 ? 'var(--gold)' : 'var(--red)';
     return `<div style="display:flex; justify-content:space-between;"><span>${label}</span><b style="color:${color};">${p}%</b></div>`;
   }).join('') + `<div class="tab-hint" style="margin-top:6px;">Basis: ${total} Spiele</div>`;
+}
+
+// "Kürzlich bearbeitet": merkt sich die letzten 5 bearbeiteten/hinzugefügten Spiele-IDs
+function trackRecentlyEdited(id){
+  let recent = [];
+  try{ recent = JSON.parse(localStorage.getItem('zl_recently_edited') || '[]'); }catch(e){}
+  recent = recent.filter(x => x !== id);
+  recent.unshift(id);
+  recent = recent.slice(0, 5);
+  try{ localStorage.setItem('zl_recently_edited', JSON.stringify(recent)); }catch(e){}
+}
+function renderRecentlyEdited(){
+  const el = document.getElementById('recentlyEditedList');
+  let recent = [];
+  try{ recent = JSON.parse(localStorage.getItem('zl_recently_edited') || '[]'); }catch(e){}
+  const found = recent.map(id => games.find(g => g.id === id)).filter(Boolean);
+  if (found.length === 0){ el.innerHTML = '<p class="tab-hint">Noch keine Bearbeitungen.</p>'; return; }
+  el.innerHTML = found.map(g => `<button class="drawer-item" data-id="${g.id}" style="font-size:13px;">${escapeHtml(g.title)}</button>`).join('');
+  el.querySelectorAll('.drawer-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      closeDrawer();
+      setTimeout(() => openEdit(btn.dataset.id), 150);
+    });
+  });
 }
 
 let gapFillMode = false;
@@ -1613,11 +1670,18 @@ document.getElementById('bulkDeleteBtn').addEventListener('click', async () => {
   if (selectedIds.size === 0) return;
   const ok = await showConfirm(`${selectedIds.size} Spiel(e) wirklich unwiderruflich löschen?`);
   if (!ok) return;
+  const deletedGames = games.filter(g => selectedIds.has(g.id));
+  const count = deletedGames.length;
   games = games.filter(g => !selectedIds.has(g.id));
   selectedIds.clear();
   render();
   await saveGames();
-  showToast('🗑️ Spiele gelöscht.', 'warn');
+  showToast(`🗑️ ${count} Spiel(e) gelöscht.`, 'warn', 6000, '↩ Rückgängig', async () => {
+    games.push(...deletedGames);
+    render();
+    await saveGames();
+    showToast('↩️ Wiederhergestellt.', 'success');
+  });
   refreshDupPanelIfOpen();
 });
 
@@ -1804,17 +1868,13 @@ function renderDashboard(){
 }
 
 function renderBackupReminder(){
-  const el = document.getElementById('backupReminder');
+  const badge = document.getElementById('backupWarnBadge');
   let lastExport = null;
   try{ lastExport = localStorage.getItem('zl_last_export'); }catch(e){}
   const daysSince = lastExport ? Math.floor((Date.now() - new Date(lastExport).getTime()) / 86400000) : Infinity;
-  if (daysSince < 7){ el.style.display = 'none'; return; }
-  el.style.display = 'flex';
-  el.innerHTML = `
-    <span>💾 ${lastExport ? `Letztes Backup vor ${daysSince} Tagen` : 'Noch nie ein Backup gemacht'} - Zeit für ein JSON-Backup?</span>
-    <button class="btn btn-ghost" id="backupNowBtn" type="button">Jetzt exportieren</button>
-  `;
-  document.getElementById('backupNowBtn').addEventListener('click', () => document.getElementById('exportBtn').click());
+  if (daysSince < 7){ badge.style.display = 'none'; return; }
+  badge.style.display = 'flex';
+  badge.title = lastExport ? `Letztes Backup vor ${daysSince} Tagen - Zeit für ein neues? (Export im Menü)` : 'Noch nie ein Backup gemacht (Export im Menü)';
 }
 
 let currentSort = { col: 'title', dir: 'asc' };
@@ -1897,6 +1957,7 @@ function renderGenreChips(){
 
 function renderTable(){
   const search = document.getElementById('searchInput').value.toLowerCase();
+  currentSearchTerm = document.getElementById('searchInput').value.trim();
   const statusVal = document.getElementById('statusFilter').value;
   const prioVal = document.getElementById('prioFilter').value;
 
@@ -1953,7 +2014,7 @@ function renderTable(){
     return `<tr data-id="${g.id}">
       <td><input type="checkbox" class="row-select" data-id="${g.id}" ${selectedIds.has(g.id)?'checked':''}></td>
       <td class="row-cover-cell">${g.cover ? `<img class="row-cover" src="${g.cover}" alt="">` : ''}</td>
-      <td class="title-cell">${isNewSinceVisit(g) ? `<span class="new-flag">🆕</span>` : ''}${escapeHtml(g.title)}${(g.platform && !(g.source === 'steam' && g.platform === 'PC')) ? `<span class="platform-tag">${escapeHtml(g.platform)}</span>` : ''}${criticBadge(g)}${g.source === 'steam' ? `<img class="steam-badge" src="steam-icon.png" title="Von Steam importiert" alt="Steam">` : ''}${g.source === 'psn' ? `<img class="psn-badge" src="psn-icon.png" title="Von PlayStation importiert" alt="PSN">` : ''}${isDusty(g) ? `<span class="dusty-flag" title="Seit über einem Jahr im Backlog ohne Fortschritt">🕸️</span>` : ''}${g.preordered ? `<span class="preorder-flag" title="Vorbestellt">🎟️</span>` : ''}<a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></td>
+      <td class="title-cell">${isNewSinceVisit(g) ? `<span class="new-flag">🆕</span>` : ''}${highlightMatch(g.title)}${(g.platform && !(g.source === 'steam' && g.platform === 'PC')) ? `<span class="platform-tag">${escapeHtml(g.platform)}</span>` : ''}${criticBadge(g)}${g.source === 'steam' ? `<img class="steam-badge" src="steam-icon.png" title="Von Steam importiert" alt="Steam">` : ''}${g.source === 'psn' ? `<img class="psn-badge" src="psn-icon.png" title="Von PlayStation importiert" alt="PSN">` : ''}${isDusty(g) ? `<span class="dusty-flag" title="Seit über einem Jahr im Backlog ohne Fortschritt">🕸️</span>` : ''}${g.preordered ? `<span class="preorder-flag" title="Vorbestellt">🎟️</span>` : ''}<a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></td>
       <td><span class="status-pill" style="background:${color}22; color:${color}; border:1px solid ${color}55;">${g.status||'–'}</span></td>
       <td class="prio-tag">${(g.status === 'Noch zocken' && g.priority) ? g.priority.replace(/^[0-9]+\\.\\s*/,'') : '<span class="muted">–</span>'}</td>
       <td>${g.price ? parseFloat(g.price).toFixed(2)+' €' : '<span class="muted">–</span>'}</td>
@@ -1989,7 +2050,7 @@ function renderTable(){
     return `<div class="mcard" data-id="${g.id}">
       <div class="mcard-top">
         ${g.cover ? `<img class="mcard-cover" src="${g.cover}" alt="">` : ''}
-        <span class="mcard-title" style="flex:1;">${isNewSinceVisit(g) ? `<span class="new-flag">🆕</span>` : ''}${escapeHtml(g.title)}${isDusty(g) ? ` <span class="dusty-flag" title="Seit über einem Jahr im Backlog">🕸️</span>` : ''}${g.preordered ? ` <span class="preorder-flag" title="Vorbestellt">🎟️</span>` : ''} <a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></span>
+        <span class="mcard-title" style="flex:1;">${isNewSinceVisit(g) ? `<span class="new-flag">🆕</span>` : ''}${highlightMatch(g.title)}${isDusty(g) ? ` <span class="dusty-flag" title="Seit über einem Jahr im Backlog">🕸️</span>` : ''}${g.preordered ? ` <span class="preorder-flag" title="Vorbestellt">🎟️</span>` : ''} <a class="row-hltb" href="https://howlongtobeat.com/?q=${encodeURIComponent(g.title)}" target="_blank" rel="noopener" title="Bei HowLongToBeat ansehen">⏱</a></span>
         <span class="status-pill" style="background:${color}22; color:${color}; border:1px solid ${color}55; flex-shrink:0;">${g.status||'–'}</span>
       </div>
       <div class="mcard-meta">
@@ -2035,11 +2096,11 @@ function renderCoverGrid(list, gridId){
     const prio = (g.status === 'Noch zocken' && g.priority) ? g.priority.replace(/^[0-9]+\.\s*/,'') : null;
     return `<div class="ctile" data-id="${g.id}">
       ${withSelection ? `<input type="checkbox" class="ctile-select row-select" data-id="${g.id}" ${selectedIds.has(g.id)?'checked':''}>` : ''}
-      ${g.cover ? `<img src="${g.cover}" alt="">` : `<div class="ctile-noimg">${escapeHtml(g.title)}</div>`}
+      ${g.cover ? `<img src="${g.cover}" alt="">` : `<div class="ctile-noimg">${highlightMatch(g.title)}</div>`}
       <span class="ctile-status" style="background:${color}dd; color:#fff;">${g.status||'–'}</span>
       ${isNewSinceVisit(g) ? `<span class="ctile-new-flag">🆕</span>` : ''}
       ${platformCornerBadge(g)}
-      <div class="ctile-title">${escapeHtml(g.title)}</div>
+      <div class="ctile-title">${highlightMatch(g.title)}</div>
       <div class="ctile-overlay">
         <div><b>Status:</b> ${g.status||'–'}</div>
         ${prio ? `<div><b>Priorität:</b> ${escapeHtml(prio)}</div>` : ''}
@@ -2206,11 +2267,21 @@ document.getElementById('vrCtileSizeSlider').addEventListener('input', (e) => {
 });
 
 /* ---------- Moderne Benachrichtigungen (statt Browser-alert/confirm) ---------- */
-function showToast(message, type='info', duration=3500){
+function showToast(message, type='info', duration=3500, actionLabel=null, actionCallback=null){
   const container = document.getElementById('toastContainer');
   const el = document.createElement('div');
   el.className = 'toast ' + type;
   el.innerHTML = message;
+  if (actionLabel && actionCallback){
+    const btn = document.createElement('button');
+    btn.className = 'toast-action-btn';
+    btn.textContent = actionLabel;
+    btn.addEventListener('click', () => {
+      actionCallback();
+      el.remove();
+    });
+    el.appendChild(btn);
+  }
   container.appendChild(el);
   setTimeout(() => {
     el.style.transition = 'opacity .25s ease';
@@ -2313,6 +2384,16 @@ function escapeHtml(str){
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+// Hebt den aktuellen Suchbegriff im (bereits escapten) Titel farbig hervor
+let currentSearchTerm = '';
+function highlightMatch(title){
+  const safe = escapeHtml(title);
+  if (!currentSearchTerm) return safe;
+  const escapedTerm = currentSearchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp('(' + escapedTerm + ')', 'ig');
+  return safe.replace(re, '<mark class="search-hl">$1</mark>');
 }
 
 function togglePriorityField(){
@@ -2517,6 +2598,7 @@ document.getElementById('gameForm').addEventListener('submit', async (e) => {
       genre: document.getElementById('f_genre').value,
     };
     let becameCompleted = false;
+    let finalId = id;
     if (id){
       const idx = games.findIndex(g => g.id === id);
       if (idx > -1){
@@ -2529,9 +2611,12 @@ document.getElementById('gameForm').addEventListener('submit', async (e) => {
         const ok = await showConfirm(`"${escapeHtml(data.title)}" ist schon in deiner Liste (Status: ${escapeHtml(dup.status || '–')}). Trotzdem als neuer Eintrag hinzufügen?`);
         if (!ok) return;
       }
-      games.push({ id: uid(), addedAt: new Date().toISOString().slice(0,10), ...data });
+      const newGame = { id: uid(), addedAt: new Date().toISOString().slice(0,10), ...data };
+      games.push(newGame);
+      finalId = newGame.id;
       if (data.status === 'Durchgezockt') becameCompleted = true;
     }
+    trackRecentlyEdited(finalId);
     closeModal();
     render();
     saveGames().catch(err => console.error('Hintergrund-Speichern fehlgeschlagen', err));
@@ -2549,11 +2634,18 @@ document.getElementById('deleteBtn').addEventListener('click', async () => {
   const g = games.find(x => x.id === id);
   const ok = await showConfirm(`"${escapeHtml(g ? g.title : 'Dieses Spiel')}" wirklich unwiderruflich löschen?`);
   if (!ok) return;
-  games = games.filter(g => g.id !== id);
+  const deletedGame = g;
+  const deletedIndex = games.findIndex(x => x.id === id);
+  games = games.filter(x => x.id !== id);
   closeModal();
   render();
   saveGames().catch(err => console.error('Hintergrund-Speichern fehlgeschlagen', err));
-  showToast('🗑️ Spiel gelöscht.', 'warn');
+  showToast(`🗑️ "${escapeHtml(deletedGame.title)}" gelöscht.`, 'warn', 6000, '↩ Rückgängig', async () => {
+    games.splice(deletedIndex, 0, deletedGame);
+    render();
+    await saveGames();
+    showToast('↩️ Wiederhergestellt.', 'success');
+  });
   refreshDupPanelIfOpen();
 });
 
@@ -2608,7 +2700,7 @@ document.getElementById('exportBtn').addEventListener('click', () => {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   try{ localStorage.setItem('zl_last_export', new Date().toISOString()); }catch(e){}
-  document.getElementById('backupReminder').style.display = 'none';
+  document.getElementById('backupWarnBadge').style.display = 'none';
   showToast('✓ Backup heruntergeladen.', 'success');
 });
 
@@ -2656,6 +2748,17 @@ document.getElementById('csvExportBtn').addEventListener('click', () => {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+});
+
+document.getElementById('xlsxExportBtn').addEventListener('click', () => {
+  const cols = ['title','status','priority','platform','acquire','price','wishprice','verdict','finished','duration','lang','releasedate','notes'];
+  const header = ['Titel','Status','Priorität','Plattform','Bezugsart','Preis','Wunschpreis','Fazit','Durchgezockt am','Dauer','Sprache','Release','Bemerkungen'];
+  const data = [header].concat(games.map(g => cols.map(c => g[c] ?? '')));
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = cols.map(c => ({ wch: c === 'notes' ? 40 : c === 'title' ? 30 : 14 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Zockerliste');
+  XLSX.writeFile(wb, 'zockerliste-' + new Date().toISOString().slice(0,10) + '.xlsx');
 });
 
 /* ---------- View switcher (Liste / Cover) ---------- */
@@ -2740,6 +2843,70 @@ function playCompletionChime(){
     });
     setTimeout(() => ctx.close(), 700);
   }catch(e){ /* Sound ist nur nettes Extra */ }
+}
+
+/* ---------- Release-Erinnerungen (heute / in 7 Tagen) ---------- */
+let releaseRemindersEnabled = localStorage.getItem('zl_release_reminders_enabled') === 'true';
+document.getElementById('releaseReminderToggle').checked = releaseRemindersEnabled;
+document.getElementById('releaseReminderToggle').addEventListener('change', (e) => {
+  releaseRemindersEnabled = e.target.checked;
+  localStorage.setItem('zl_release_reminders_enabled', String(releaseRemindersEnabled));
+  if (releaseRemindersEnabled && 'Notification' in window && Notification.permission === 'default'){
+    Notification.requestPermission();
+  }
+  if (releaseRemindersEnabled) checkReleaseReminders();
+  else document.getElementById('releaseReminderCard').style.display = 'none';
+});
+
+function checkReleaseReminders(){
+  const card = document.getElementById('releaseReminderCard');
+  if (!releaseRemindersEnabled){ card.style.display = 'none'; return; }
+
+  const today = new Date().toISOString().slice(0,10);
+  const in7 = new Date(Date.now() + 7*86400000).toISOString().slice(0,10);
+  const relevant = games.filter(g => g.releasedate && (g.releasedate === today || g.releasedate === in7) && !isVrGame(g));
+  if (relevant.length === 0){ card.style.display = 'none'; return; }
+
+  let dismissed = [];
+  try{ dismissed = JSON.parse(localStorage.getItem('zl_dismissed_reminders_' + today) || '[]'); }catch(e){}
+  const toShow = relevant.filter(g => !dismissed.includes(g.id));
+  if (toShow.length === 0){ card.style.display = 'none'; return; }
+
+  card.style.display = 'flex';
+  card.innerHTML = toShow.map(g => {
+    const isToday = g.releasedate === today;
+    return `<div class="release-reminder-item" data-id="${g.id}">
+      <span>${isToday ? '🎉' : '⏳'} <b>${escapeHtml(g.title)}</b> ${isToday ? 'erscheint heute!' : 'erscheint in 7 Tagen!'}</span>
+      <button class="release-reminder-close" data-id="${g.id}" title="Nicht mehr anzeigen">✕</button>
+    </div>`;
+  }).join('');
+  card.querySelectorAll('.release-reminder-close').forEach(btn => {
+    btn.addEventListener('click', () => {
+      let d = [];
+      try{ d = JSON.parse(localStorage.getItem('zl_dismissed_reminders_' + today) || '[]'); }catch(e){}
+      d.push(btn.dataset.id);
+      localStorage.setItem('zl_dismissed_reminders_' + today, JSON.stringify(d));
+      checkReleaseReminders();
+    });
+  });
+
+  // Zusätzlich als lokale Handy-/Browser-Benachrichtigung, falls erlaubt (nur einmal pro Tag pro Spiel)
+  if ('Notification' in window && Notification.permission === 'granted'){
+    let notified = [];
+    try{ notified = JSON.parse(localStorage.getItem('zl_notified_' + today) || '[]'); }catch(e){}
+    toShow.forEach(g => {
+      if (notified.includes(g.id)) return;
+      const isToday = g.releasedate === today;
+      try{
+        new Notification('🎮 Zockerliste', {
+          body: isToday ? `${g.title} erscheint heute!` : `${g.title} erscheint in 7 Tagen!`,
+          icon: 'icon-192.png',
+        });
+      }catch(e){ /* Benachrichtigung ist nur nettes Extra */ }
+      notified.push(g.id);
+    });
+    localStorage.setItem('zl_notified_' + today, JSON.stringify(notified));
+  }
 }
 
 /* ---------- In-modal database search ---------- */
