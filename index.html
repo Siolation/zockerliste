@@ -696,7 +696,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-08-25-releasereminder-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-09-26-categoryratings-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
@@ -828,6 +828,19 @@
       </div>
     </div>
     <div id="genreChipsRow" class="month-chips" style="margin-bottom:16px;"></div>
+    <div class="filters" style="margin-bottom:16px;">
+      <select id="categoryFilterSelect">
+        <option value="">Kategorie-Filter...</option>
+        <option value="Story">Story</option>
+        <option value="Gameplay">Gameplay</option>
+        <option value="Grafik">Grafik</option>
+        <option value="Musik">Musik</option>
+        <option value="Performance">Performance</option>
+      </select>
+      <select id="categoryFilterGrade">
+        <option value="">Mindestnote...</option>
+      </select>
+    </div>
     <div id="syncProgress" class="tab-hint" style="display:none;"></div>
     <div id="dupCheckPanel" class="table-card" style="display:none; padding:18px 20px; margin-bottom:20px;"></div>
     <div id="steamRecentPanel" class="table-card" style="display:none; padding:18px 20px; margin-bottom:20px;"></div>
@@ -1183,6 +1196,32 @@
         <div class="field">
           <label>Fazit / Note</label>
           <input type="text" id="f_verdict" placeholder="z.B. 2, 3+, 2-">
+          <button type="button" id="toggleDetailRatingBtn" class="btn btn-ghost" style="margin-top:6px; font-size:12px; padding:5px 10px;">📊 Detaillierte Bewertung</button>
+          <div id="detailRatingBox" style="display:none; margin-top:10px; padding:12px; background:var(--bg-elev2); border-radius:8px; border:1px solid var(--line);">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+              <div>
+                <label style="font-size:11px;">Story</label>
+                <select id="f_ratingStory" class="detail-rating-select"></select>
+              </div>
+              <div>
+                <label style="font-size:11px;">Gameplay</label>
+                <select id="f_ratingGameplay" class="detail-rating-select"></select>
+              </div>
+              <div>
+                <label style="font-size:11px;">Grafik</label>
+                <select id="f_ratingGrafik" class="detail-rating-select"></select>
+              </div>
+              <div>
+                <label style="font-size:11px;">Musik</label>
+                <select id="f_ratingMusik" class="detail-rating-select"></select>
+              </div>
+              <div>
+                <label style="font-size:11px;">Performance</label>
+                <select id="f_ratingPerformance" class="detail-rating-select"></select>
+              </div>
+            </div>
+            <p id="detailRatingAvg" class="tab-hint" style="margin:10px 0 0;">Noch keine Kategorie bewertet.</p>
+          </div>
         </div>
       </div>
       <div class="field-row">
@@ -1615,10 +1654,66 @@ let selectedIds = new Set();
 function getVerdictColor(verdict){
   const v = parseVerdict(verdict);
   if (v === null) return 'var(--text-muted)';
-  if (v <= 2) return '#3ecf8e';
-  if (v <= 3.5) return '#e8a33d';
-  return '#e8556b';
+  // Sanfter Farbverlauf: 1.0 (grün, gut) bis 6.0 (rot, schlecht)
+  const clamped = Math.max(1, Math.min(6, v));
+  const t = (clamped - 1) / 5; // 0 = beste Note, 1 = schlechteste
+  const hue = 142 - t * 142; // 142° (grün) -> 0° (rot)
+  return `hsl(${hue}, 65%, 50%)`;
 }
+
+const GRADE_OPTIONS = ['1+','1','1-','2+','2','2-','3+','3','3-','4+','4','4-','5+','5','5-','6+','6','6-'];
+const RATING_CATEGORIES = ['Story','Gameplay','Grafik','Musik','Performance'];
+
+function populateGradeSelects(){
+  const html = '<option value="">–</option>' + GRADE_OPTIONS.map(g => `<option value="${g}">${g}</option>`).join('');
+  RATING_CATEGORIES.forEach(cat => {
+    document.getElementById('f_rating' + cat).innerHTML = html;
+  });
+}
+populateGradeSelects();
+document.getElementById('categoryFilterGrade').innerHTML += GRADE_OPTIONS.map(g => `<option value="${g}">${g} oder besser</option>`).join('');
+document.getElementById('categoryFilterSelect').addEventListener('change', renderTable);
+document.getElementById('categoryFilterGrade').addEventListener('change', renderTable);
+
+// Wandelt eine Durchschnitts-Zahl zurück in eine Schulnote mit +/- (z.B. 1.7 -> "2+")
+function numberToGrade(num){
+  const rounded = Math.round(num / 0.3) * 0.3;
+  const base = Math.round(rounded);
+  const diff = rounded - base;
+  let suffix = '';
+  if (diff < -0.1) suffix = '+';
+  else if (diff > 0.1) suffix = '-';
+  return String(Math.max(1, Math.min(6, base))) + suffix;
+}
+
+function updateDetailRatingAverage(){
+  const values = RATING_CATEGORIES
+    .map(cat => document.getElementById('f_rating' + cat).value)
+    .filter(Boolean)
+    .map(g => parseVerdict(g));
+  const avgEl = document.getElementById('detailRatingAvg');
+  const verdictInput = document.getElementById('f_verdict');
+  if (values.length === 0){
+    avgEl.textContent = 'Noch keine Kategorie bewertet.';
+    verdictInput.readOnly = false;
+    verdictInput.style.background = '';
+    return;
+  }
+  const avg = values.reduce((a,b) => a+b, 0) / values.length;
+  const grade = numberToGrade(avg);
+  avgEl.innerHTML = `Durchschnitt aus ${values.length} Kategorie${values.length===1?'':'n'}: <b style="color:${getVerdictColor(grade)};">${grade}</b> (übernommen ins Fazit-Feld)`;
+  verdictInput.value = grade;
+  verdictInput.readOnly = true;
+  verdictInput.style.background = 'var(--bg-elev2)';
+}
+document.querySelectorAll('.detail-rating-select').forEach(sel => {
+  sel.addEventListener('change', updateDetailRatingAverage);
+});
+document.getElementById('toggleDetailRatingBtn').addEventListener('click', () => {
+  const box = document.getElementById('detailRatingBox');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+});
+
 
 function criticBadge(g){
   if (!g.criticRating) return '';
@@ -1960,6 +2055,8 @@ function renderTable(){
   currentSearchTerm = document.getElementById('searchInput').value.trim();
   const statusVal = document.getElementById('statusFilter').value;
   const prioVal = document.getElementById('prioFilter').value;
+  const categoryFilterCat = document.getElementById('categoryFilterSelect').value;
+  const categoryFilterMinGrade = document.getElementById('categoryFilterGrade').value;
 
   let list = games.filter(g => {
     if (isVrGame(g)) return false;
@@ -1972,6 +2069,13 @@ function renderTable(){
     if (statusVal && g.status !== statusVal) return false;
     if (prioVal && g.priority !== prioVal) return false;
     if (activeGenreFilter && !(g.genre||'').split(',').map(x=>x.trim()).includes(activeGenreFilter)) return false;
+    if (categoryFilterCat && categoryFilterMinGrade){
+      const catValue = g['rating' + categoryFilterCat];
+      if (!catValue) return false;
+      const catNum = parseVerdict(catValue);
+      const minNum = parseVerdict(categoryFilterMinGrade);
+      if (catNum > minNum) return false;
+    }
     return true;
   });
 
@@ -2422,6 +2526,10 @@ function openAdd(){
   document.getElementById('dbSearchResults').innerHTML = '';
   document.getElementById('deleteBtn').style.display = 'none';
   document.getElementById('achievementsDisplay').textContent = 'Erst speichern, dann Erfolge laden.';
+  document.getElementById('f_verdict').readOnly = false;
+  document.getElementById('f_verdict').style.background = '';
+  document.getElementById('detailRatingBox').style.display = 'none';
+  document.getElementById('detailRatingAvg').textContent = 'Noch keine Kategorie bewertet.';
   document.getElementById('overlay').style.display = 'flex';
   togglePriorityField();
   document.getElementById('f_title').focus();
@@ -2440,6 +2548,13 @@ function openEdit(id){
   document.getElementById('f_price').value = g.price || '';
   document.getElementById('f_wishprice').value = g.wishprice || '';
   document.getElementById('f_verdict').value = g.verdict || '';
+  document.getElementById('f_verdict').readOnly = false;
+  document.getElementById('f_verdict').style.background = '';
+  RATING_CATEGORIES.forEach(cat => {
+    document.getElementById('f_rating' + cat).value = g['rating' + cat] || '';
+  });
+  document.getElementById('detailRatingBox').style.display = RATING_CATEGORIES.some(cat => g['rating' + cat]) ? 'block' : 'none';
+  updateDetailRatingAverage();
   document.getElementById('f_finished').value = g.finished || '';
   document.getElementById('f_duration').value = g.duration || '';
   document.getElementById('f_lang').value = g.lang || '';
@@ -2586,6 +2701,11 @@ document.getElementById('gameForm').addEventListener('submit', async (e) => {
       price: document.getElementById('f_price').value,
       wishprice: document.getElementById('f_wishprice').value,
       verdict: document.getElementById('f_verdict').value.trim(),
+      ratingStory: document.getElementById('f_ratingStory').value,
+      ratingGameplay: document.getElementById('f_ratingGameplay').value,
+      ratingGrafik: document.getElementById('f_ratingGrafik').value,
+      ratingMusik: document.getElementById('f_ratingMusik').value,
+      ratingPerformance: document.getElementById('f_ratingPerformance').value,
       finished: document.getElementById('f_finished').value,
       duration: document.getElementById('f_duration').value,
       lang: document.getElementById('f_lang').value,
