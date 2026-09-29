@@ -430,6 +430,8 @@
 
   .dusty-flag{color:var(--gold); font-size:11px; margin-left:6px;}
   .new-flag{font-size:11px; margin-right:6px;}
+  .tro-chip{display:inline-flex; align-items:center; gap:4px; margin-left:10px; font-size:12px; color:var(--text-muted);}
+  .tro-chip::before{content:''; width:9px; height:9px; border-radius:50%; background:var(--c);}
   .critic-badge{font-size:11px; font-weight:700; margin-left:6px;}
   .preorder-flag{font-size:11px; margin-left:6px;}
   .verdict-pill{padding:2px 8px; border-radius:6px; font-size:12.5px; font-weight:600;}
@@ -696,7 +698,7 @@
     <div class="brand">
       <h1>Zocker<span>liste</span></h1>
       <p id="subtitle">Lade Spiele...</p>
-      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-09-26-categoryratings-v1</p>
+      <p style="font-size:10px; color:var(--text-faint); margin:2px 0 0;">Build: 2026-09-28-trophies-v1</p>
       <p id="saveIndicator" style="font-size:11px; color:var(--green); margin:4px 0 0; opacity:0; transition:opacity .3s ease;">✓ Gespeichert</p>
     </div>
     <div class="header-actions">
@@ -804,6 +806,17 @@
       <input type="text" id="searchInput" placeholder="Titel oder Bemerkung suchen...">
       <select id="statusFilter"><option value="">Alle Status</option></select>
       <select id="prioFilter"><option value="">Alle Prioritäten</option></select>
+      <select id="categoryFilterSelect">
+        <option value="">Kategorie-Filter...</option>
+        <option value="Story">Story</option>
+        <option value="Gameplay">Gameplay</option>
+        <option value="Grafik">Grafik</option>
+        <option value="Musik">Musik</option>
+        <option value="Performance">Performance</option>
+      </select>
+      <select id="categoryFilterGrade">
+        <option value="">Mindestnote...</option>
+      </select>
       <div class="view-switch">
         <button class="view-btn active" id="viewListBtn" type="button" title="Listenansicht">📋</button>
         <button class="view-btn" id="viewGridBtn" type="button" title="Cover-Ansicht">▦</button>
@@ -828,19 +841,6 @@
       </div>
     </div>
     <div id="genreChipsRow" class="month-chips" style="margin-bottom:16px;"></div>
-    <div class="filters" style="margin-bottom:16px;">
-      <select id="categoryFilterSelect">
-        <option value="">Kategorie-Filter...</option>
-        <option value="Story">Story</option>
-        <option value="Gameplay">Gameplay</option>
-        <option value="Grafik">Grafik</option>
-        <option value="Musik">Musik</option>
-        <option value="Performance">Performance</option>
-      </select>
-      <select id="categoryFilterGrade">
-        <option value="">Mindestnote...</option>
-      </select>
-    </div>
     <div id="syncProgress" class="tab-hint" style="display:none;"></div>
     <div id="dupCheckPanel" class="table-card" style="display:none; padding:18px 20px; margin-bottom:20px;"></div>
     <div id="steamRecentPanel" class="table-card" style="display:none; padding:18px 20px; margin-bottom:20px;"></div>
@@ -1073,6 +1073,13 @@
       <h3>💶 Günstigstes Vergnügen (€ pro Spielstunde)</h3>
       <p class="tab-hint" style="margin-top:-6px;">Nur Spiele mit eingetragenem Preis und eingetragener Dauer.</p>
       <div id="valueForMoney" class="rank-list"></div>
+    </div>
+    <div class="chart-card">
+      <h3>🏆 Trophäen &amp; Erfolge</h3>
+      <p class="tab-hint" style="margin-top:-6px;">Nur Spiele, bei denen du im Bearbeiten-Fenster schon mal "🏆 Laden" gedrückt hast - kein automatischer Rundum-Abruf (schont das Tageslimit).</p>
+      <div id="trophySummary" class="stat-grid" style="margin-bottom:14px;"></div>
+      <p class="tab-hint" style="margin:0 0 6px;">Steam-Erfolge freigeschaltet pro Monat</p>
+      <div id="trophyMonthChart" class="css-bar-chart"></div>
     </div>
     <div class="chart-card">
       <h3>🎮 Genres</h3>
@@ -2538,7 +2545,7 @@ function openAdd(){
 function openEdit(id){
   const g = games.find(x => x.id === id);
   if (!g) return;
-  document.getElementById('achievementsDisplay').textContent = 'Noch nicht geladen.';
+  renderTrophyDisplay(g);
   document.getElementById('modalTitle').textContent = 'Spiel bearbeiten';
   document.getElementById('gameId').value = g.id;
   document.getElementById('f_title').value = g.title || '';
@@ -2639,6 +2646,37 @@ document.getElementById('hltbFillBtn').addEventListener('click', async () => {
   }
 });
 
+/* ---------- Erfolge / Trophäen: am Spiel speichern und anzeigen ---------- */
+function renderTrophyDisplay(g){
+  const el = document.getElementById('achievementsDisplay');
+  const t = g && g.trophies;
+  if (!t){ el.textContent = 'Noch nicht geladen.'; return; }
+  if (t.src === 'psn'){
+    const tiers = [['platinum','Platin','#8fd3ff'],['gold','Gold','#ffd24a'],['silver','Silber','#c7ccd6'],['bronze','Bronze','#cd7f32']];
+    const chips = tiers.map(([k,label,color]) => {
+      const e = (t.earned && t.earned[k]) || 0;
+      const d = (t.defined && t.defined[k]) || 0;
+      return `<span class="tro-chip" style="--c:${color}" title="${label}">${e}/${d}</span>`;
+    }).join('');
+    el.innerHTML = `🏆 <b>${t.progress}%</b>${chips}`;
+  } else {
+    el.innerHTML = `🏆 <b>${t.percent}%</b> <span class="muted">(${t.unlocked}/${t.total} Erfolge)</span>`;
+  }
+}
+
+// PSN-Trophäenlisten heißen oft z.B. "Spielname Trophies" - Zusatz beim Vergleich ignorieren
+function psnTrophyKey(name){
+  return normalizeTitle(String(name || '').replace(/\s*(trophies|trophy set|trophäen)\s*$/i, ''));
+}
+function findPsnTrophyMatch(g, list){
+  const key = normalizeTitle(g.title);
+  const cands = list.filter(t => psnTrophyKey(t.name) === key);
+  if (cands.length === 0) return null;
+  const samePlat = g.platform ? cands.filter(t => (t.platform || '').includes(g.platform)) : [];
+  const pool = samePlat.length ? samePlat : cands;
+  return [...pool].sort((a,b) => (b.progress||0) - (a.progress||0))[0];
+}
+
 document.getElementById('achievementsLoadBtn').addEventListener('click', async () => {
   const id = document.getElementById('gameId').value;
   const g = games.find(x => x.id === id);
@@ -2651,17 +2689,33 @@ document.getElementById('achievementsLoadBtn').addEventListener('click', async (
     if (g.source === 'steam' && g.steamAppId){
       const res = await proxyFetch(`${IGDB_PROXY_URL}?action=steamachievements&appid=${g.steamAppId}`);
       const data = await res.json();
-      displayEl.textContent = data.found ? `🏆 ${data.percent}% (${data.unlocked}/${data.total})` : (data.reason || 'Keine Erfolge für dieses Spiel.');
-    } else if (g.source === 'psn'){
+      if (!data.found){ displayEl.textContent = data.reason || 'Keine Erfolge für dieses Spiel.'; return; }
+      g.trophies = { src:'steam', unlocked:data.unlocked, total:data.total, percent:data.percent, byMonth:data.byMonth || {}, updatedAt:new Date().toISOString() };
+      await saveGames();
+    } else if (g.source === 'psn' || (g.platform && g.platform.startsWith('PS'))){
       if (!psnNpsso) await loadPsnNpsso();
       if (!psnNpsso){ displayEl.textContent = 'PlayStation-Zugang im Seitenmenü eintragen.'; return; }
       const res = await proxyFetch(`${IGDB_PROXY_URL}?action=psntrophies`, { 'X-PSN-NPSSO': psnNpsso });
       const data = await res.json();
-      const match = (data.results || []).find(t => normalizeTitle(t.name) === normalizeTitle(g.title));
-      displayEl.textContent = match ? `🏆 ${match.progress}%` : 'Nicht in der PSN-Trophäenliste gefunden.';
+      if (data.error){ displayEl.textContent = data.error; return; }
+      const list = data.results || [];
+      // Die Anfrage liefert ohnehin alle Spiele auf einmal - dann gleich bei allen PSN-Spielen mitspeichern
+      let updated = 0;
+      games.forEach(x => {
+        if (x.id !== g.id && x.source !== 'psn') return;
+        const m = findPsnTrophyMatch(x, list);
+        if (!m) return;
+        x.trophies = { src:'psn', progress:m.progress, earned:m.earned, defined:m.defined, lastEarned:m.lastUpdated, updatedAt:new Date().toISOString() };
+        updated++;
+      });
+      if (!g.trophies){ displayEl.textContent = 'Nicht in der PSN-Trophäenliste gefunden.'; return; }
+      await saveGames();
+      if (updated > 1) showToast(`🏆 Trophäen bei ${updated} PlayStation-Spielen aktualisiert.`, 'success', 3500);
     } else {
       displayEl.textContent = 'Nur für Steam- oder PSN-importierte Spiele verfügbar.';
+      return;
     }
+    renderTrophyDisplay(g);
   }catch(err){
     displayEl.textContent = 'Fehlgeschlagen: ' + err.message;
   }finally{
@@ -4403,8 +4457,52 @@ function renderCssBarChart(containerId, labels, values, formatFn){
   }).join('');
 }
 
+function renderTrophyStats(){
+  const withTrophies = games.filter(g => g.trophies);
+  const summaryEl = document.getElementById('trophySummary');
+  const chartEl = document.getElementById('trophyMonthChart');
+  if (withTrophies.length === 0){
+    summaryEl.innerHTML = '<p class="muted">Noch keine Trophäen/Erfolge geladen.</p>';
+    chartEl.innerHTML = '';
+    return;
+  }
+  const psnGames = withTrophies.filter(g => g.trophies.src === 'psn');
+  const steamGames = withTrophies.filter(g => g.trophies.src === 'steam');
+  const tierSum = { platinum:0, gold:0, silver:0, bronze:0 };
+  psnGames.forEach(g => {
+    ['platinum','gold','silver','bronze'].forEach(k => { tierSum[k] += (g.trophies.earned && g.trophies.earned[k]) || 0; });
+  });
+  const steamUnlocked = steamGames.reduce((s,g) => s + (g.trophies.unlocked||0), 0);
+  const steamTotal = steamGames.reduce((s,g) => s + (g.trophies.total||0), 0);
+
+  summaryEl.innerHTML = `
+    <div class="stat-card"><div class="val">${psnGames.length + steamGames.length}</div><div class="lbl">Spiele mit geladenen Trophäen</div></div>
+    <div class="stat-card"><div class="val" style="color:#8fd3ff;">${tierSum.platinum}</div><div class="lbl">🏆 Platin</div></div>
+    <div class="stat-card"><div class="val" style="color:#ffd24a;">${tierSum.gold}</div><div class="lbl">🥇 Gold</div></div>
+    <div class="stat-card"><div class="val" style="color:#c7ccd6;">${tierSum.silver}</div><div class="lbl">🥈 Silber</div></div>
+    <div class="stat-card"><div class="val" style="color:#cd7f32;">${tierSum.bronze}</div><div class="lbl">🥉 Bronze</div></div>
+    <div class="stat-card"><div class="val">${steamUnlocked}${steamTotal ? ' / '+steamTotal : ''}</div><div class="lbl">Steam-Erfolge</div></div>
+  `;
+
+  const byMonth = {};
+  steamGames.forEach(g => {
+    Object.entries(g.trophies.byMonth || {}).forEach(([ym, count]) => { byMonth[ym] = (byMonth[ym]||0) + count; });
+  });
+  const months = Object.keys(byMonth).sort();
+  if (months.length === 0){
+    chartEl.innerHTML = '<span class="muted">Keine zeitlich aufgeschlüsselten Steam-Erfolge vorhanden.</span>';
+    return;
+  }
+  const labels = months.map(ym => {
+    const [y,m] = ym.split('-');
+    return MONTH_NAMES_DE[parseInt(m,10)-1].slice(0,3) + ' ' + y.slice(2);
+  });
+  renderCssBarChart('trophyMonthChart', labels, months.map(ym => byMonth[ym]), v => v + 'x');
+}
+
 function renderStats(){
   renderProgressBar();
+  renderTrophyStats();
   const finished = games.filter(g => g.status === 'Durchgezockt');
   const backlogCount = games.filter(g => ['Noch zocken','Am zocken','Pausiert','Kommt noch'].includes(g.status)).length;
   const totalSpent = games.reduce((s,g)=> s + (parseFloat(g.price)||0), 0);
